@@ -13,7 +13,7 @@ class Elector(ABC):
     """
 
     @abstractmethod
-    def elect(self):
+    async def elect(self):
         """
         Elects a leader for the aggregation.
         Returns: Address of the leader.
