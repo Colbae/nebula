@@ -136,6 +136,19 @@ message AddTrustworthyMessage {
   string node_addr = 1; //Address of newly trustworthy node
 }
 
+message RepresentativeMessage {
+  string node_addr = 1;
+}
+
+// Sent to the new trust node from each trust node
+message TrustInfoMessage {
+  repeated string represented = 1;
+  repeated string trusted = 2;
+  string validator = 3;
+  string elector = 4;
+  string reputator = 5;
+}
+
 message  LeaderMessage {
   string leader_addr = 1;
 }
