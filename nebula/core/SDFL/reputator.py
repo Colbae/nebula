@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from nebula.core.nebulaevents import ReputationEvent
+
 
 class Reputator(ABC):
     """
@@ -11,13 +13,12 @@ class Reputator(ABC):
     """
 
     @abstractmethod
-    def update_reputation(self, sdfl_node, node_addr):
+    def update_reputation(self, re: ReputationEvent):
         """
         Update the reputation score of the given node.
 
         Args:
-            sdfl_node: Reference to sdfl_node object to access information required for reputation.
-            node_addr: Address of the node.
+            re (ReputationEvent): Instance of ReputationEvent.
         """
         pass
 

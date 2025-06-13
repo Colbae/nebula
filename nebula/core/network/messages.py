@@ -94,6 +94,8 @@ class MessagesManager:
             },
             "discover": {"parameters": ["action"], "defaults": {}},
             "link": {"parameters": ["action", "addrs"], "defaults": {}},
+            "addTrustworthy": {"parameters": ["node_addr"], "defaults": {}},
+            "leader": {"parameters": ["leader_addr"], "defaults": {}},
             # Add additional message types here
         }
 
