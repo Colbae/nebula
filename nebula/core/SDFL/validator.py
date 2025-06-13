@@ -19,3 +19,11 @@ class Validator(ABC):
         Returns: True if the proposed model meets the required standards.
         """
         pass
+
+
+def create_validator(v_type: str) -> Validator:
+    return Validator()
+
+
+def get_validator_string(rep: type[Validator]) -> str:
+    return "Validator"

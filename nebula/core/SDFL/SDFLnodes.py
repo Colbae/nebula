@@ -80,12 +80,13 @@ class FollowerNode(AggregatorNode):
         model,
         datamodule,
         representative,
+        trust_node=None,
         config=Config,
         trainer=Lightning,
         security=False,
     ):
         self.representative = representative
-        self._trust_node = None
+        self._trust_node = trust_node
         super().__init__(
             model,
             datamodule,
@@ -100,3 +101,4 @@ class FollowerNode(AggregatorNode):
 
     def promote_node(self, trust_node: TrustNode):
         self._trust_node = trust_node
+        self.representative = None

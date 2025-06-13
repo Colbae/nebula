@@ -19,3 +19,11 @@ class Elector(ABC):
         Returns: Address of the leader.
         """
         pass
+
+
+def create_elector(e_type: str) -> Elector:
+    return Elector()
+
+
+def get_elector_string(rep: type[Elector]) -> str:
+    return "Elector"

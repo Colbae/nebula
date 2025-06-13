@@ -149,5 +149,14 @@
   "misc_args": {
     "grace_time_connection": 10,
     "grace_time_start_federation": 10
+  },
+  "sdfl_args": {
+    "elector": "RoundRobinElector",
+    "validator": "NoValidator",
+    "reputator": "NoReputator",
+    "trustworthy": [],
+    "representative": "",
+    "trusted_nodes": [],
+    "representated_nodes": []
   }
 }
