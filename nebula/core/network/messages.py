@@ -95,6 +95,11 @@ class MessagesManager:
             "discover": {"parameters": ["action"], "defaults": {}},
             "link": {"parameters": ["action", "addrs"], "defaults": {}},
             "addTrustworthy": {"parameters": ["node_addr"], "defaults": {}},
+            "representative": {"parameters": ["node_addr"], "defaults": {}},
+            "trustInfo": {
+                "parameters": ["represented", "trusted", "validator", "elector", "reputator"],
+                "defaults": {"represented": [], "trusted": []},
+            },
             "leader": {"parameters": ["leader_addr"], "defaults": {}},
             # Add additional message types here
         }
