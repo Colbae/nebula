@@ -11,7 +11,7 @@ class Validator(ABC):
     """
 
     @abstractmethod
-    def validate(self, model):
+    async def validate(self, model):
         """
         Validates a proposed model.
         Args:
