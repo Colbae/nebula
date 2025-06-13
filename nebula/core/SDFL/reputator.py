@@ -13,7 +13,7 @@ class Reputator(ABC):
     """
 
     @abstractmethod
-    def update_reputation(self, re: ReputationEvent):
+    async def update_reputation(self, re: ReputationEvent):
         """
         Update the reputation score of the given node.
 
@@ -23,7 +23,7 @@ class Reputator(ABC):
         pass
 
     @abstractmethod
-    def is_trustworthy(self, node):
+    async def is_trustworthy(self, node):
         """
         Takes address string of Node. Returns True if the node is trustworthy.
 
