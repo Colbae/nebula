@@ -5,6 +5,11 @@ import warnings
 
 import torch
 
+from nebula.core.SDFL.elector import create_elector
+from nebula.core.SDFL.reputator import create_reputator
+from nebula.core.SDFL.SDFLnodes import FollowerNode, TrustNode
+from nebula.core.SDFL.validator import create_validator
+
 torch.multiprocessing.set_start_method("spawn", force=True)
 
 # Ignore CryptographyDeprecationWarning (datatime issues with cryptography library)
@@ -37,8 +42,8 @@ from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
 from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
-from nebula.core.role import Role
 from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
+from nebula.core.role import Role
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 
@@ -160,7 +165,7 @@ async def main(config):
         local_test_set_indices=dataset.local_test_indices,
         num_workers=num_workers,
         batch_size=batch_size,
-        samples_per_label = samples_per_label
+        samples_per_label=samples_per_label,
     )
 
     trainer = None
@@ -214,13 +219,47 @@ async def main(config):
 
     logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {node_cls.__name__}")
 
-    node = node_cls(
-        model=model,
-        datamodule=datamodule,
-        config=config,
-        trainer=trainer,
-        security=False,
-    )
+    if config.participant["scenario_args"]["federation"] == "SDFL":
+        if not config.participant["sdfl_args"]["trustworthy"]:
+            node = FollowerNode(
+                representative=config.participant["sdfl_args"]["representative"],
+                model=model,
+                datamodule=datamodule,
+                config=config,
+                trainer=trainer,
+                security=False,
+            )
+        else:
+            e = create_elector(config.participant["sdfl_args"]["elector"])
+            r = create_reputator(config.participant["sdfl_args"]["reputator"])
+            v = create_validator(config.participant["sdfl_args"]["validator"])
+
+            tn = TrustNode(
+                represented_nodes=config.participant["sdfl_args"]["representated_nodes"],
+                trusted_nodes=config.participant["sdfl_args"]["trusted_nodes"],
+                validator=v,
+                elector=e,
+                reputator=r,
+            )
+            node = FollowerNode(
+                representative=config.participant["sdfl_args"]["representative"],
+                trust_node=tn,
+                model=model,
+                datamodule=datamodule,
+                config=config,
+                trainer=trainer,
+                security=False,
+            )
+
+    else:
+        node = node_cls(
+            model=model,
+            datamodule=datamodule,
+            config=config,
+            trainer=trainer,
+            security=False,
+        )
+
     await node.start_communications()
     await node.deploy_components()
     await node.deploy_federation()
