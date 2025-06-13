@@ -30,3 +30,11 @@ class Reputator(ABC):
         Returns: True if node is trustworthy, False otherwise.y
         """
         pass
+
+
+def create_reputator(r_type: str) -> Reputator:
+    return Reputator()
+
+
+def get_reputator_string(rep: type[Reputator]) -> str:
+    return "Reputator"
