@@ -3,6 +3,11 @@ from abc import ABC, abstractmethod
 from nebula.core.nebulaevents import ReputationEvent
 
 
+class InvalidReputatorError(ValueError):
+    def __init__(self, r_type: str):
+        super().__init__(f"Invalid reputator type: '{r_type}'")
+
+
 class Reputator(ABC):
     """
     Abstract base class that handles reputation rules.
@@ -32,9 +37,30 @@ class Reputator(ABC):
         pass
 
 
+class NoReputator(Reputator):
+    """
+    Implements to skip Reputation.
+    """
+
+    async def update_reputation(self, re: ReputationEvent):
+        """
+        Reputation skipped, does nothing.
+        """
+        pass
+
+    async def is_trustworthy(self, node):
+        """
+        Reputation skipped, always returns False.
+        """
+        return False
+
+
 def create_reputator(r_type: str) -> Reputator:
-    return Reputator()
+    match r_type:
+        case "NoReputator":
+            return NoReputator()
+    raise InvalidReputatorError(r_type)
 
 
 def get_reputator_string(rep: type[Reputator]) -> str:
-    return "Reputator"
+    return rep.__name__

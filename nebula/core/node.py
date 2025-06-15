@@ -230,7 +230,13 @@ async def main(config):
                 security=False,
             )
         else:
-            e = create_elector(config.participant["sdfl_args"]["elector"])
+            e = create_elector(
+                config.participant["sdfl_args"]["elector"],
+                config.participant["sdfl_args"]["representated_nodes"],
+                config.participant["sdfl_args"]["trusted_nodes"],
+                config.participant["network_args"]["ip"],
+                config.participant["network_args"]["port"],
+            )
             r = create_reputator(config.participant["sdfl_args"]["reputator"])
             v = create_validator(config.participant["sdfl_args"]["validator"])
 
