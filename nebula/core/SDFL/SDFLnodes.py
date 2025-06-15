@@ -17,12 +17,16 @@ class TrustNode:
         self,
         represented_nodes,
         trusted_nodes,
+        ip,
+        port,
         elector: Elector,
         validator: Validator,
         reputator: Reputator,
     ):
         self.represented_nodes = set(represented_nodes)
         self.trusted_nodes = set(trusted_nodes)
+        self.ip = ip
+        self.port = port
         self.elector = elector
         self.validator = validator
         self.reputator = reputator
@@ -44,12 +48,18 @@ class TrustNode:
     def leader(self):
         return self._leader
 
+    @property
+    def this_node(self):
+        return f"{self.ip}:{self.port}"
+
     async def _elect_leader(self, ee: ElectionEvent):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
 
         self._leader = await self.elector.elect()
         m = cm.create_message("leader", "", leader=self.leader)
         for n in self.represented_nodes:
+            if n == self.this_node:
+                continue
             await cm.send_message(n, m)
         return self.leader
 
@@ -60,18 +70,14 @@ class TrustNode:
                 cm: CommunicationsManager = CommunicationsManager.get_instance()
                 m = cm.create_message("addTrustworthy", "", node_addr=re)
                 for n in self.trusted_nodes:
+                    if n == self.this_node:
+                        continue
                     await cm.send_message(n, m)
                 self.trusted_nodes.add(re)
 
     async def _validate_model(self, ve: ValidationEvent):
         if not await self.validator.validate(ve):
             logging.info("Validation failed")
-
-    async def _send_msg_to_trusted(self, message_type: str, action: str = "", *args, **kwargs):
-        cm: CommunicationsManager = CommunicationsManager.get_instance()
-        m = cm.create_message(message_type, action, args, kwargs)
-        for n in self.trusted_nodes:
-            await cm.send_message(n, m)
 
     async def _update_represented(self, new_rep):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
@@ -83,6 +89,8 @@ class TrustNode:
 
             for n in r:
                 m = cm.create_message("representative", "", node_addr=new_rep)
+                if n == self.this_node:
+                    continue
                 await cm.send_message(n, m)
                 self.represented_nodes.remove(n)
                 removed_nodes.append(n)
@@ -103,7 +111,7 @@ class TrustNode:
             trusted=list(self.trusted_nodes),
             represened=rep,
         )
-        await cm.send_message(source, m)
+        await cm.send_message(message.node_addr, m)
         async with self._lock:
             self.trusted_nodes.add(message.node_addr)
 
@@ -155,11 +163,13 @@ class FollowerNode(AggregatorNode):
     async def _promote_node(self, source, message):
         if not self._trust_node:
             r = create_reputator(message.reputator)
-            e = create_elector(message.elector)
+            e = create_elector(message.elector, message.represented, message.trusted, self.ip, self.port)
             v = create_validator(message.validator)
             self._trust_node = TrustNode(
                 represented_nodes=message.represented,
                 trusted_nodes=message.trusted,
+                ip=self.ip,
+                port=self.port,
                 elector=e,
                 validator=v,
                 reputator=r,
