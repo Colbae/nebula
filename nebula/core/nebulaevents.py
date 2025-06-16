@@ -403,26 +403,6 @@ class ElectionEvent(NodeEvent):
         return False
 
 
-class ReputationEvent(NodeEvent):
-    def __init__(self, node_addr: str, is_leader: bool):
-        """
-        Initializes an ReputationEvent.
-        Args:
-            node_addr:
-        """
-        self._node = node_addr
-        self.is_leader = is_leader
-
-    def __str__(self):
-        return f"Updating reputation for node {self._node}"
-
-    async def get_event_data(self) -> tuple[str, bool]:
-        return (self._node, self.is_leader)
-
-    async def is_concurrent(self) -> bool:
-        return True
-
-
 class ValidationEvent(NodeEvent):
     def __init__(self, model):
         self._model = model

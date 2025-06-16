@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from nebula.core.nebulaevents import ReputationEvent
+from nebula.core.SDFL.SDFLnodes import TrustNode
 
 
 class InvalidReputatorError(ValueError):
@@ -18,12 +18,13 @@ class Reputator(ABC):
     """
 
     @abstractmethod
-    async def update_reputation(self, re: ReputationEvent):
+    async def update_reputation(self, node: str, trust_node: TrustNode):
         """
         Update the reputation score of the given node.
 
         Args:
-            re (ReputationEvent): Instance of ReputationEvent.
+            node: Node of which the reputation should be updated.
+            trust_node: Instance of TrustNode to retrieve relevant information.
         """
         pass
 
@@ -32,17 +33,17 @@ class Reputator(ABC):
         """
         Takes address string of Node. Returns True if the node is trustworthy.
 
-        Returns: True if node is trustworthy, False otherwise.y
+        Returns: True if node is trustworthy, False otherwise.
         """
         pass
 
 
 class NoReputator(Reputator):
     """
-    Implements to skip Reputation.
+    Implementation to skip Reputation.
     """
 
-    async def update_reputation(self, re: ReputationEvent):
+    async def update_reputation(self, node: str, trust_node: TrustNode):
         """
         Reputation skipped, does nothing.
         """
