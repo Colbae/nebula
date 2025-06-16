@@ -34,11 +34,6 @@ class NoValidator(Validator):
     async def validate(self, model):
         """
         Always returns True. Skips validation of proposed model.
-        Args:
-            model:
-
-        Returns:
-
         """
         return True
 
