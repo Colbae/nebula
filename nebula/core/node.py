@@ -5,11 +5,6 @@ import warnings
 
 import torch
 
-from nebula.core.SDFL.elector import create_elector
-from nebula.core.SDFL.reputator import create_reputator
-from nebula.core.SDFL.SDFLnodes import FollowerNode, TrustNode
-from nebula.core.SDFL.validator import create_validator
-
 torch.multiprocessing.set_start_method("spawn", force=True)
 
 # Ignore CryptographyDeprecationWarning (datatime issues with cryptography library)
@@ -44,6 +39,10 @@ from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.role import Role
+from nebula.core.SDFL.elector import create_elector
+from nebula.core.SDFL.reputator import create_reputator
+from nebula.core.SDFL.SDFLnodes import FollowerNode, TrustNode
+from nebula.core.SDFL.validator import create_validator
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 

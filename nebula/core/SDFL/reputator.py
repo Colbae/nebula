@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from nebula.core.SDFL.SDFLnodes import TrustNode
-
 
 class InvalidReputatorError(ValueError):
     def __init__(self, r_type: str):
@@ -18,7 +16,7 @@ class Reputator(ABC):
     """
 
     @abstractmethod
-    async def update_reputation(self, node: str, trust_node: TrustNode):
+    async def update_reputation(self, node: str, trust_node):
         """
         Update the reputation score of the given node.
 
@@ -43,7 +41,7 @@ class NoReputator(Reputator):
     Implementation to skip Reputation.
     """
 
-    async def update_reputation(self, node: str, trust_node: TrustNode):
+    async def update_reputation(self, node: str, trust_node):
         """
         Reputation skipped, does nothing.
         """
@@ -67,7 +65,7 @@ class TimeBasedReputator(Reputator):
         # Dict from node to score, score is a tuple of form (join_time, leader_num)
         self.nodes: dict[str, tuple[int, int]] = {}
 
-    async def update_reputation(self, node: str, trust_node: TrustNode):
+    async def update_reputation(self, node: str, trust_node):
         prev_rep = self.nodes.get(node, (0, 0))
         time = prev_rep[0] + 1
         leader_num = prev_rep[1]

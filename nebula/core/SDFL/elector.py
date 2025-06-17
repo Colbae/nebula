@@ -58,7 +58,7 @@ class RoundRobinElector(Elector):
 
     async def start_communication(self):
         em: EventManager = EventManager.get_instance()
-        await em.subscribe(("leader", ""), self._leader_received)
+        await em.subscribe(("leader", "elect"), self._leader_received)
 
     async def _await_choice(self, timeout=30):
         start_time = asyncio.get_running_loop().time()
@@ -83,7 +83,7 @@ class RoundRobinElector(Elector):
 
     async def _send_choice(self, choice):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
-        m = cm.create_message("leader", "", leader_addr=choice)
+        m = cm.create_message("leader", "elect", leader_addr=choice)
         for n in self.trust_nodes:
             if n == self.this_node:
                 continue

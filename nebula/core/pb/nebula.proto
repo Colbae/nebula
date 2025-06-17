@@ -133,15 +133,24 @@ message ResponseMessage {
 
 // AddTrustworthyMessage is to nodify nodes of new trustworthy node
 message AddTrustworthyMessage {
+  enum Action {
+    ADD = 0;
+  }
   string node_addr = 1; //Address of newly trustworthy node
 }
 
 message RepresentativeMessage {
+  enum Action {
+    UPDATE = 0;
+  }
   string node_addr = 1;
 }
 
 // Sent to the new trust node from each trust node
 message TrustInfoMessage {
+  enum Action {
+    TRUST_INFO = 0;
+  }
   repeated string represented = 1;
   repeated string trusted = 2;
   string validator = 3;
@@ -150,5 +159,8 @@ message TrustInfoMessage {
 }
 
 message  LeaderMessage {
+  enum Action {
+    ELECT = 0;
+  }
   string leader_addr = 1;
 }
