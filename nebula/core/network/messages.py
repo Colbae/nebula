@@ -94,9 +94,9 @@ class MessagesManager:
             },
             "discover": {"parameters": ["action"], "defaults": {}},
             "link": {"parameters": ["action", "addrs"], "defaults": {}},
-            "addTrustworthy": {"parameters": ["node_addr"], "defaults": {}},
+            "add_trustworthy": {"parameters": ["node_addr"], "defaults": {}},
             "representative": {"parameters": ["node_addr"], "defaults": {}},
-            "trustInfo": {
+            "trust_info": {
                 "parameters": ["represented", "trusted", "validator", "elector", "reputator"],
                 "defaults": {"represented": [], "trusted": []},
             },
