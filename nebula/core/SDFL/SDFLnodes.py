@@ -139,6 +139,8 @@ class FollowerNode(AggregatorNode):
         trainer=Lightning,
         security=False,
     ):
+        self.leader = None
+        self._lock = asyncio.Lock()
         self.representative = representative
         self._trust_node = trust_node
         super().__init__(
@@ -161,6 +163,9 @@ class FollowerNode(AggregatorNode):
         await em.subscribe(("trustInfo", ""), self._promote_node)
         # subscribe to representative updates
         await em.subscribe(("representative", ""), self._update_representative)
+        # subscribe to leader update
+        await em.subscribe(("leader", ""), self._update_leader)
+        # trust node callbacks
         if self.trust_node is not None:
             await self._trust_node.start_communications()
 
@@ -186,3 +191,7 @@ class FollowerNode(AggregatorNode):
             await self._trust_node.start_communications()
         else:
             await self._trust_node.update_represented(message.represented)
+
+    async def _update_leader(self, source, message):
+        async with self._lock:
+            self.leader = message.leader_addr
