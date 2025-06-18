@@ -2,6 +2,7 @@ import asyncio
 import secrets
 from abc import ABC, abstractmethod
 
+from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
 from nebula.core.network.communications import CommunicationsManager
 
@@ -32,12 +33,13 @@ class Elector(ABC):
 
 
 class RoundRobinElector(Elector):
-    def __init__(self, represented: list[str], trust_nodes: list[str], ip, port):
+    def __init__(self, config):
+        trust_nodes = list(config.participant["sdfl_args"]["trusted_nodes"])
         trust_nodes.sort()
-        self.represented = represented
+        self.represented = config.participant["sdfl_args"]["representated_nodes"]
         self.trust_nodes = trust_nodes
-        self.ip = ip
-        self.port = port
+        self.ip = config.participant["network_args"]["ip"]
+        self.port = config.participant["network_args"]["ip"]
         self.received_leader = None
         self.current = 0
         self.lock = asyncio.Lock()
@@ -90,10 +92,11 @@ class RoundRobinElector(Elector):
             await cm.send_message(n, m)
 
 
-def create_elector(e_type: str, represented: list[str], trust_nodes: list[str], ip, port) -> Elector:
+def create_elector(config: Config) -> Elector:
+    e_type = config.participant["sdfl_args"]["elector"]
     match e_type:
         case "RoundRobinElector":
-            return RoundRobinElector(represented, trust_nodes, ip, port)
+            return RoundRobinElector(config)
     raise InvalidElectorError(e_type)
 
 
