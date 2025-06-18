@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from nebula.config.config import Config
+
 
 class InvalidReputatorError(ValueError):
     def __init__(self, r_type: str):
@@ -80,7 +82,8 @@ class TimeBasedReputator(Reputator):
         return time and leader
 
 
-def create_reputator(r_type: str) -> Reputator:
+def create_reputator(config: Config) -> Reputator:
+    r_type = config.participant["sdfl_args"]["reputator"]
     match r_type:
         case "NoReputator":
             return NoReputator()

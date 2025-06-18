@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from nebula.config.config import Config
+
 
 class InvalidValidatorError(ValueError):
     def __init__(self, v_type: str):
@@ -38,7 +40,8 @@ class NoValidator(Validator):
         return True
 
 
-def create_validator(v_type: str) -> Validator:
+def create_validator(config: Config) -> Validator:
+    v_type = config.participant["sdfl_args"]["validator"]
     match v_type:
         case "NoValidator":
             return NoValidator()
