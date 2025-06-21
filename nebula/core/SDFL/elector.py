@@ -4,12 +4,19 @@ from abc import ABC, abstractmethod
 
 from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import LeaderElectedEvent, RoundStartEvent
 from nebula.core.network.communications import CommunicationsManager
 
 
 class InvalidElectorError(ValueError):
     def __init__(self, e_type: str):
         super().__init__(f"Invalid reputator type: '{e_type}'")
+
+
+async def publish_election_event(leader, round_num):
+    em: EventManager = EventManager.get_instance()
+    le = LeaderElectedEvent(leader, round_num)
+    await em.publish_node_event(le)
 
 
 class Elector(ABC):
@@ -20,42 +27,55 @@ class Elector(ABC):
     considered trustworthy. Subclasses should implement the logic for determining the leader.
 
     The leader's address is expected to be consistent across all trustworthy nodes.
-    This consistency ensures that all trustworthy nodes agree on who the leader is.
+    This consistency ensures that all trustworthy nodes agree on whom the leader is.
     """
 
     @abstractmethod
-    async def elect(self):
+    async def elect(self, re: RoundStartEvent):
         """
         Elects a leader for the aggregation.
+        Args:
+            re: ElectionEvent object
         Returns: Address of the leader.
         """
         pass
 
 
 class RoundRobinElector(Elector):
-    def __init__(self, config):
-        trust_nodes = list(config.participant["sdfl_args"]["trusted_nodes"])
+    def __init__(self, config, represented=None, trusted=None):
+        if trusted is not None:
+            trust_nodes = list(trusted)
+        else:
+            trust_nodes = list(config.participant["sdfl_args"]["trusted_nodes"])
         trust_nodes.sort()
-        self.represented = config.participant["sdfl_args"]["representated_nodes"]
+
+        if represented is not None:
+            rep = list(represented)
+        else:
+            rep = list(config.participant["sdfl_args"]["representated_nodes"])
+
+        self.represented = rep
         self.trust_nodes = trust_nodes
-        self.ip = config.participant["network_args"]["ip"]
-        self.port = config.participant["network_args"]["ip"]
         self.received_leader = None
         self.current = 0
         self.lock = asyncio.Lock()
+        self.ip = config.participant["network_args"]["ip"]
+        self.port = config.participant["network_args"]["port"]
 
     @property
-    def this_node(self):
+    def addr(self):
         return f"{self.ip}:{self.port}"
 
-    async def elect(self):
-        if self.trust_nodes[self.current] == self.this_node:
-            leader = secrets.choice(self.trust_nodes)
+    async def elect(self, re: RoundStartEvent):
+        if self.trust_nodes[self.current] == self.addr:
+            leader = secrets.choice(self.represented)
             await self._send_choice(leader)
         else:
             leader = await self._await_choice()
 
         self.current = (self.current + 1) % len(self.trust_nodes)
+        r, _, _ = await re.get_event_data()
+        await publish_election_event(leader, r)
         return leader
 
     async def start_communication(self):
@@ -87,16 +107,16 @@ class RoundRobinElector(Elector):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
         m = cm.create_message("leader", "elect", leader_addr=choice)
         for n in self.trust_nodes:
-            if n == self.this_node:
+            if n == self.addr:
                 continue
             await cm.send_message(n, m)
 
 
-def create_elector(config: Config) -> Elector:
+def create_elector(config: Config, represented=None, trusted=None) -> Elector:
     e_type = config.participant["sdfl_args"]["elector"]
     match e_type:
         case "RoundRobinElector":
-            return RoundRobinElector(config)
+            return RoundRobinElector(config, represented, trusted)
     raise InvalidElectorError(e_type)
 
 
