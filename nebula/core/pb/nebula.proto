@@ -26,6 +26,10 @@ message Wrapper {
     DiscoverMessage discover_message = 9;
     OfferMessage offer_message = 10;
     LinkMessage link_message = 11;
+    AddTrustworthyMessage add_trustworthy_message = 12;
+    RepresentativeMessage representative_message = 13;
+    TrustInfoMessage trust_info_message = 14;
+    LeaderMessage leader_message = 15;
   }
 }
 
@@ -136,14 +140,16 @@ message AddTrustworthyMessage {
   enum Action {
     ADD = 0;
   }
-  string node_addr = 1; //Address of newly trustworthy node
+  Action action = 1;
+  string node_addr = 2; //Address of newly trustworthy node
 }
 
 message RepresentativeMessage {
   enum Action {
     UPDATE = 0;
   }
-  string node_addr = 1;
+  Action action = 1;
+  string node_addr = 2;
 }
 
 // Sent to the new trust node from each trust node
@@ -151,16 +157,19 @@ message TrustInfoMessage {
   enum Action {
     TRUST_INFO = 0;
   }
-  repeated string represented = 1;
-  repeated string trusted = 2;
-  string validator = 3;
-  string elector = 4;
-  string reputator = 5;
+  Action action = 1;
+  repeated string represented = 2;
+  repeated string trusted = 3;
+  string validator = 4;
+  string elector = 5;
+  string reputator = 6;
 }
 
 message  LeaderMessage {
   enum Action {
     ELECT = 0;
   }
-  string leader_addr = 1;
+  Action action = 1;
+  string leader_addr = 2;
+  int32 round = 3;
 }

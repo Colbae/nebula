@@ -383,23 +383,26 @@ class DuplicatedMessageEvent(NodeEvent):
     async def is_concurrent(self) -> bool:
         return True
 
-class ElectionEvent(NodeEvent):
-    def __init__(self, round_num):
-        """
-        Initializes an ElectionEvent.
+class LeaderElectedEvent(NodeEvent):
+    """Event triggered when a leader election is completed."""
 
-        Args:
-            round_num (int): Round number for witch the leader should be elected.
+    def __init__(self, leader, round_num):
         """
+        Initializes an LeaderElectedEvent.
+        Args:
+            leader (str): Node elected as leader.
+            round_num (int): Round number.
+        """
+        self._leader = leader
         self._round = round_num
 
     def __str__(self):
-        return f"Election for round {self._round}"
+        return f"Node {self._leader} elected as leader for round {self._round}"
 
-    async def get_event_data(self) -> int:
-        return self._round
+    async def get_event_data(self) -> tuple[str, int]:
+        return self._leader, self._round
 
-    def is_concurrent(self) -> bool:
+    async def is_concurrent(self) -> bool:
         return False
 
 

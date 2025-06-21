@@ -3,10 +3,10 @@ import logging
 
 from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, RoundStartEvent, ValidationEvent
+from nebula.core.nebulaevents import RoundEndEvent, RoundStartEvent, ValidationEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.noderole import AggregatorNode
-from nebula.core.SDFL.elector import Elector, create_elector, get_elector_string
+from nebula.core.SDFL.elector import Elector, create_elector, get_elector_string, publish_election_event
 from nebula.core.SDFL.reputator import Reputator, create_reputator, get_reputator_string
 from nebula.core.SDFL.validator import Validator, create_validator, get_validator_string
 from nebula.core.training.lightning import Lightning
@@ -33,12 +33,16 @@ class TrustNode:
         self._leader = None
         self._lock = asyncio.Lock()
 
+    @property
+    def addr(self):
+        return f"{self.ip}:{self.port}"
+
     async def start_communications(self):
         em: EventManager = EventManager.get_instance()
         # Initiate election callback
-        await em.subscribe_node_event(ElectionEvent, self._elect_leader)
+        await em.subscribe_node_event(RoundStartEvent, self._elect_leader)
         # Initiate reputation callback
-        await em.subscribe_node_event(RoundStartEvent, self._update_reputation)
+        await em.subscribe_node_event(RoundEndEvent, self._update_reputation)
         # Initiate validation callback
         await em.subscribe_node_event(ValidationEvent, self._validate_model)
         # Initiate adding trust node callback
@@ -48,24 +52,19 @@ class TrustNode:
     def leader(self):
         return self._leader
 
-    @property
-    def this_node(self):
-        return f"{self.ip}:{self.port}"
-
-    async def _elect_leader(self, ev: ElectionEvent):
+    async def _elect_leader(self, re: RoundStartEvent):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
-
-        self._leader = await self.elector.elect()
-        m = cm.create_message("leader", "elect", leader=self.leader)
+        self._leader = await self.elector.elect(re)
+        r, _, _ = await re.get_event_data()
+        m = cm.create_message("leader", "elect", leader_addr=self.leader, round=r)
         for n in self.represented_nodes:
-            if n == self.this_node:
+            if n == self.addr:
                 continue
             await cm.send_message(n, m)
-        return self.leader
 
-    async def _update_reputation(self, re: RoundStartEvent):
+    async def _update_reputation(self, re: RoundEndEvent):
         for r_node in self.represented_nodes:
-            if r_node == self.this_node:
+            if r_node == self.addr:
                 continue
             await self.reputator.update_reputation(r_node, self)
             trustworthy = await self.reputator.is_trustworthy(r_node)
@@ -74,14 +73,10 @@ class TrustNode:
                     cm: CommunicationsManager = CommunicationsManager.get_instance()
                     m = cm.create_message("add_trustworthy", "add", node_addr=re)
                     for t_node in self.trusted_nodes:
-                        if t_node == self.this_node:
+                        if t_node == self.addr:
                             continue
                         await cm.send_message(t_node, m)
-                    self.trusted_nodes.add(re)
-        # Reputations have been updated, leader for next round can now be elected
-        em: EventManager = EventManager.get_instance()
-        r = await re.get_event_data()
-        await em.publish_node_event(ElectionEvent(round_num=r[0]))
+                    self.trusted_nodes.add(r_node)
 
     async def _validate_model(self, ve: ValidationEvent):
         if not await self.validator.validate(ve):
@@ -97,7 +92,7 @@ class TrustNode:
 
             for n in r:
                 m = cm.create_message("representative", "update", node_addr=new_rep)
-                if n == self.this_node:
+                if n == self.addr:
                     continue
                 await cm.send_message(n, m)
                 self.represented_nodes.remove(n)
@@ -175,9 +170,9 @@ class FollowerNode(AggregatorNode):
 
     async def _promote_node(self, source, message):
         if not self._trust_node:
-            r = create_reputator(message.reputator)
-            e = create_elector(message.elector, message.represented, message.trusted, self.ip, self.port)
-            v = create_validator(message.validator)
+            r = create_reputator(self.config)
+            e = create_elector(self.config, message.represented, message.trusted)
+            v = create_validator(self.config)
             self._trust_node = TrustNode(
                 represented_nodes=message.represented,
                 trusted_nodes=message.trusted,
@@ -195,3 +190,4 @@ class FollowerNode(AggregatorNode):
     async def _update_leader(self, source, message):
         async with self._lock:
             self.leader = message.leader_addr
+            await publish_election_event(self.leader, message.round)

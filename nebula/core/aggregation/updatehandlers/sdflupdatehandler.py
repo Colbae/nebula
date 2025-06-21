@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from nebula.core.aggregation.updatehandlers.updatehandler import UpdateHandler
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateNeighborEvent, UpdateReceivedEvent
+from nebula.core.nebulaevents import LeaderElectedEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -64,6 +64,8 @@ class SDFLUpdateHandler(UpdateHandler):
         self._notification = False
         self._missing_ones = set()
         self._nodes_using_historic = set()
+        self._leader_lock = Locker(name="leader_lock", async_lock=True)
+        self._leader = None
 
     @property
     def us(self):
@@ -81,6 +83,7 @@ class SDFLUpdateHandler(UpdateHandler):
         """
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
+        await EventManager.get_instance().subscribe_node_event(LeaderElectedEvent, self._leader_elected)
 
     async def round_expected_updates(self, federation_nodes: set):
         """
@@ -301,3 +304,10 @@ class SDFLUpdateHandler(UpdateHandler):
                 await self._round_updates_lock.release_async()
             all_received = True
         return all_received
+
+    async def _leader_elected(self, le: LeaderElectedEvent):
+        leader, _ = await le.get_event_data()
+        logging.info(f"Leader elected: {leader}")
+        await self._leader_lock.acquire_async()
+        self._leader = leader
+        await self._leader_lock.release_async()
