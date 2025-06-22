@@ -28,19 +28,9 @@ class Validator(ABC):
         pass
 
 
-class NoValidator(Validator):
-    """
-    Implementation to skip validation of proposed model.
-    """
-
-    async def validate(self, model):
-        """
-        Always returns True. Skips validation of proposed model.
-        """
-        return True
-
-
 def create_validator(config: Config) -> Validator:
+    from nebula.core.SDFL.Validators.NoValidator import NoValidator
+
     v_type = config.participant["sdfl_args"]["validator"]
     match v_type:
         case "NoValidator":
