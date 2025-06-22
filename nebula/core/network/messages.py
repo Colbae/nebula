@@ -94,13 +94,13 @@ class MessagesManager:
             },
             "discover": {"parameters": ["action"], "defaults": {}},
             "link": {"parameters": ["action", "addrs"], "defaults": {}},
-            "add_trustworthy": {"parameters": ["node_addr"], "defaults": {}},
-            "representative": {"parameters": ["node_addr"], "defaults": {}},
-            "trust_info": {
-                "parameters": ["represented", "trusted", "validator", "elector", "reputator"],
+            "trustworthy": {"parameters": ["action", "node_addr"], "defaults": {}},
+            "representative": {"parameters": ["action", "node_addr"], "defaults": {}},
+            "info": {
+                "parameters": ["action", "represented", "trusted", "validator", "elector", "reputator"],
                 "defaults": {"represented": [], "trusted": []},
             },
-            "leader": {"parameters": ["leader_addr", "round"], "defaults": {}},
+            "leader": {"parameters": ["action", "leader_addr", "round"], "defaults": {}},
             # Add additional message types here
         }
 

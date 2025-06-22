@@ -84,16 +84,16 @@ class ReputationAction(Enum):
     SHARE = nebula_pb2.ReputationMessage.Action.SHARE
 
 
-class AddTrustworthyAction(Enum):
-    ADD = nebula_pb2.AddTrustworthyMessage.Action.ADD
+class TrustworthyAction(Enum):
+    ADD = nebula_pb2.TrustworthyMessage.Action.ADD
 
 
 class RepresentativeAction(Enum):
     UPDATE = nebula_pb2.RepresentativeMessage.Action.UPDATE
 
 
-class TrustInfoAction(Enum):
-    TRUST_INFO = nebula_pb2.TrustInfoMessage.Action.TRUST_INFO
+class InfoAction(Enum):
+    TRUST_INFO = nebula_pb2.InfoMessage.Action.TRUST_INFO
 
 
 class LeaderAction(Enum):
@@ -110,9 +110,9 @@ ACTION_CLASSES = {
     "offer": OfferAction,
     "link": LinkAction,
     "reputation": ReputationAction,
-    "add_trustworthy": AddTrustworthyAction,
+    "trustworthy": TrustworthyAction,
     "representative": RepresentativeAction,
-    "trust_info": TrustInfoAction,
+    "info": InfoAction,
     "leader": LeaderAction,
 }
 

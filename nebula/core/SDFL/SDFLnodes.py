@@ -46,7 +46,7 @@ class TrustNode:
         # Initiate validation callback
         await em.subscribe_node_event(ValidationEvent, self._validate_model)
         # Initiate adding trust node callback
-        await em.subscribe(("add_trustworthy", "add"), self._add_trust_node)
+        await em.subscribe(("trustworthy", "add"), self._add_trust_node_callback)
 
     @property
     def leader(self):
@@ -63,20 +63,21 @@ class TrustNode:
             await cm.send_message(n, m)
 
     async def _update_reputation(self, re: RoundEndEvent):
-        for r_node in self.represented_nodes:
+        # self.represented_nodes can be edited from promotions,
+        # create copy to iterate over
+        for r_node in list(self.represented_nodes):
             if r_node == self.addr:
                 continue
             await self.reputator.update_reputation(r_node, self)
-            trustworthy = await self.reputator.is_trustworthy(r_node)
-            if trustworthy:
+            if await self.reputator.is_trustworthy(r_node):
                 async with self._lock:
                     cm: CommunicationsManager = CommunicationsManager.get_instance()
-                    m = cm.create_message("add_trustworthy", "add", node_addr=re)
+                    m = cm.create_message("trustworthy", "add", node_addr=r_node)
                     for t_node in self.trusted_nodes:
                         if t_node == self.addr:
                             continue
                         await cm.send_message(t_node, m)
-                    self.trusted_nodes.add(r_node)
+                await self._add_trust_node(r_node)
 
     async def _validate_model(self, ve: ValidationEvent):
         if not await self.validator.validate(ve):
@@ -88,7 +89,9 @@ class TrustNode:
 
         async with self._lock:
             # TODO: decide what rep nodes are to be changed
-            r = list(self.represented_nodes)[:1]
+            if new_rep not in self.represented_nodes:
+                return []
+            r = [new_rep]
 
             for n in r:
                 m = cm.create_message("representative", "update", node_addr=new_rep)
@@ -99,24 +102,27 @@ class TrustNode:
                 removed_nodes.append(n)
         return removed_nodes
 
-    async def _add_trust_node(self, source, message):
+    async def _add_trust_node_callback(self, source, message):
         if source not in self.trusted_nodes:
             return
+        await self._add_trust_node(message.node_addr)
 
-        rep = await self._update_represented(message.node_addr)
-        cm: CommunicationsManager = CommunicationsManager.get_instance()
-        m = cm.create_message(
-            "trust_info",
-            "trust_info",
-            validator=get_validator_string(type[self.validator]),
-            reputator=get_reputator_string(type[self.reputator]),
-            elector=get_elector_string(type[self.elector]),
-            trusted=list(self.trusted_nodes),
-            represened=rep,
-        )
-        await cm.send_message(message.node_addr, m)
+    async def _add_trust_node(self, node_addr):
+        rep = await self._update_represented(node_addr)
+        if rep:
+            cm: CommunicationsManager = CommunicationsManager.get_instance()
+            m = cm.create_message(
+                "info",
+                "trust_info",
+                validator=get_validator_string(type[self.validator]),
+                reputator=get_reputator_string(type[self.reputator]),
+                elector=get_elector_string(type[self.elector]),
+                trusted=list(self.trusted_nodes),
+                represented=rep,
+            )
+            await cm.send_message(node_addr, m)
         async with self._lock:
-            self.trusted_nodes.add(message.node_addr)
+            self.trusted_nodes.add(node_addr)
 
     async def update_represented(self, rep):
         async with self._lock:
@@ -155,7 +161,7 @@ class FollowerNode(AggregatorNode):
 
         em: EventManager = EventManager.get_instance()
         # subscribe to promotion events
-        await em.subscribe(("trust_info", "trust_info"), self._promote_node)
+        await em.subscribe(("info", "trust_info"), self._promote_node)
         # subscribe to representative updates
         await em.subscribe(("representative", "update"), self._update_representative)
         # subscribe to leader update
@@ -173,9 +179,14 @@ class FollowerNode(AggregatorNode):
             r = create_reputator(self.config)
             e = create_elector(self.config, message.represented, message.trusted)
             v = create_validator(self.config)
+            trusted = [f"{self.ip}:{self.port}"]
+            rep = [f"{self.ip}:{self.port}"]
+            trusted.extend(message.trusted)
+            rep.extend(message.represented)
+
             self._trust_node = TrustNode(
-                represented_nodes=message.represented,
-                trusted_nodes=message.trusted,
+                represented_nodes=rep,
+                trusted_nodes=trusted,
                 ip=self.ip,
                 port=self.port,
                 elector=e,

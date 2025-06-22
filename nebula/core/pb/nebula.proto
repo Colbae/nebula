@@ -26,9 +26,9 @@ message Wrapper {
     DiscoverMessage discover_message = 9;
     OfferMessage offer_message = 10;
     LinkMessage link_message = 11;
-    AddTrustworthyMessage add_trustworthy_message = 12;
+    TrustworthyMessage trustworthy_message = 12;
     RepresentativeMessage representative_message = 13;
-    TrustInfoMessage trust_info_message = 14;
+    InfoMessage info_message = 14;
     LeaderMessage leader_message = 15;
   }
 }
@@ -136,7 +136,7 @@ message ResponseMessage {
 }
 
 // AddTrustworthyMessage is to nodify nodes of new trustworthy node
-message AddTrustworthyMessage {
+message TrustworthyMessage {
   enum Action {
     ADD = 0;
   }
@@ -153,7 +153,7 @@ message RepresentativeMessage {
 }
 
 // Sent to the new trust node from each trust node
-message TrustInfoMessage {
+message InfoMessage {
   enum Action {
     TRUST_INFO = 0;
   }
