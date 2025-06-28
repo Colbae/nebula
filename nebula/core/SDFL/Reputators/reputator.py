@@ -37,6 +37,13 @@ class Reputator(ABC):
         """
         pass
 
+    @abstractmethod
+    async def start_communication(self):
+        """
+        Subscribes to relevant events
+        """
+        pass
+
 
 def create_reputator(config: Config) -> Reputator:
     from nebula.core.SDFL.Reputators.NoReputator import NoReputator

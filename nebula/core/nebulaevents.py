@@ -406,6 +406,20 @@ class LeaderElectedEvent(NodeEvent):
         return False
 
 
+class TrustNodeAddedEvent(NodeEvent):
+    def __init__(self, node_addr):
+        self._node_addr = node_addr
+
+    def __str__(self):
+        return f"Node {self._node_addr} is trusted"
+
+    async def get_event_data(self) -> tuple[str, int]:
+        return self._node_addr
+
+    async def is_concurrent(self) -> bool:
+        return False
+
+
 class ValidationEvent(NodeEvent):
     def __init__(self, model):
         self._model = model

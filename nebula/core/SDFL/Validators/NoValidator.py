@@ -11,3 +11,6 @@ class NoValidator(Validator):
         Always returns True. Skips validation of proposed model.
         """
         return True
+
+    async def start_communication(self):
+        pass

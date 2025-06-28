@@ -25,3 +25,6 @@ class TimeBasedReputator(Reputator):
         time = rep[0] >= self.time_limit
         leader = rep[1] >= self.leader_limit
         return time and leader
+
+    async def start_communication(self):
+        pass

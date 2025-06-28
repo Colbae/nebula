@@ -17,3 +17,6 @@ class NoReputator(Reputator):
         Reputation skipped, always returns False.
         """
         return False
+
+    async def start_communication(self):
+        pass

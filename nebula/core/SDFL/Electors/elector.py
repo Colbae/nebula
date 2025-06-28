@@ -38,8 +38,15 @@ class Elector(ABC):
         """
         pass
 
+    @abstractmethod
+    async def start_communication(self):
+        """
+        Subscribes to relevant events
+        """
+        pass
 
-def create_elector(config: Config, trusted=None) -> Elector:
+
+def create_elector(config: Config, trusted=None):
     from nebula.core.SDFL.Electors.RoundRobinElector import RoundRobinElector
 
     e_type = config.participant["sdfl_args"]["elector"]

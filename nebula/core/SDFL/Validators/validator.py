@@ -27,6 +27,13 @@ class Validator(ABC):
         """
         pass
 
+    @abstractmethod
+    async def start_communication(self):
+        """
+        Subscribes to relevant events
+        """
+        pass
+
 
 def create_validator(config: Config) -> Validator:
     from nebula.core.SDFL.Validators.NoValidator import NoValidator
