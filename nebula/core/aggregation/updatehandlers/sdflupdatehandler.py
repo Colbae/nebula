@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from collections import deque
@@ -5,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from nebula.core.aggregation.updatehandlers.updatehandler import UpdateHandler
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import LeaderElectedEvent, UpdateNeighborEvent, UpdateReceivedEvent
+from nebula.core.nebulaevents import LeaderElectedEvent, RoundStartEvent, UpdateNeighborEvent, UpdateReceivedEvent
 from nebula.core.utils.locker import Locker
 
 if TYPE_CHECKING:
@@ -65,7 +66,9 @@ class SDFLUpdateHandler(UpdateHandler):
         self._missing_ones = set()
         self._nodes_using_historic = set()
         self._leader_lock = Locker(name="leader_lock", async_lock=True)
-        self._leader = None
+        # Dictionary from round => leader to prevent race conditions
+        self._leader = {}
+        self._current_round = 0
 
     @property
     def us(self):
@@ -77,6 +80,18 @@ class SDFLUpdateHandler(UpdateHandler):
         """Returns the aggregator instance."""
         return self._aggregator
 
+    async def _get_leader(self):
+        """
+        Safe leader retrieval, retrievs leader of current round.
+        Avoids potential KeyErrors from dict retrieval.
+        Waits for the leader to be updated.
+        """
+        while True:
+            leader = self._leader.get(self._current_round, None)
+            if leader is not None:
+                return leader
+            await asyncio.sleep(0.5)
+
     async def init(self, config=None):
         """
         Subscribe to update-related events from the event manager.
@@ -84,6 +99,7 @@ class SDFLUpdateHandler(UpdateHandler):
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
         await EventManager.get_instance().subscribe_node_event(LeaderElectedEvent, self._leader_elected)
+        await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self._update_round)
 
     async def round_expected_updates(self, federation_nodes: set):
         """
@@ -191,8 +207,12 @@ class SDFLUpdateHandler(UpdateHandler):
             self._missing_ones.clear()
 
         self._nodes_using_historic.clear()
+        leader = await self._get_leader()
         updates = {}
         for sr in self._sources_received:
+            if sr != leader:
+                # skip non-leader updates
+                continue
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
@@ -306,8 +326,11 @@ class SDFLUpdateHandler(UpdateHandler):
         return all_received
 
     async def _leader_elected(self, le: LeaderElectedEvent):
-        leader, _ = await le.get_event_data()
+        leader, r = await le.get_event_data()
         logging.info(f"Leader elected: {leader}")
         await self._leader_lock.acquire_async()
-        self._leader = leader
+        self._leader[r] = leader
         await self._leader_lock.release_async()
+
+    async def _update_round(self, re: RoundStartEvent):
+        self._current_round, _, _ = await re.get_event_data()
