@@ -18,13 +18,13 @@ class Reputator(ABC):
     """
 
     @abstractmethod
-    async def update_reputation(self, node: str, trust_node):
+    async def update_reputation(self, node: str, round_num: int):
         """
         Update the reputation score of the given node.
 
         Args:
             node: Node of which the reputation should be updated.
-            trust_node: Instance of TrustNode to retrieve relevant information.
+            round_num: round for which the reputation should be updated.
         """
         pass
 

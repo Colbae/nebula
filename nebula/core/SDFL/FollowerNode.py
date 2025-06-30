@@ -76,8 +76,7 @@ class FollowerNode(AggregatorNode):
             )
             self.representative = None
             await self._trust_node.start_communications()
-        else:
-            await self._trust_node.update_represented(message.represented)
+        await self._trust_node.update_represented(source, message, self.round)
 
     async def _update_leader(self, source, message):
         async with self._lock:

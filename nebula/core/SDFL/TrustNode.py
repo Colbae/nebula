@@ -2,11 +2,11 @@ import asyncio
 import logging
 
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import RoundEndEvent, RoundStartEvent, TrustNodeAddedEvent, ValidationEvent
+from nebula.core.nebulaevents import ElectionEvent, RoundStartEvent, TrustNodeAddedEvent, ValidationEvent
 from nebula.core.network.communications import CommunicationsManager
-from nebula.core.SDFL.Electors.elector import Elector, get_elector_string
-from nebula.core.SDFL.Reputators.reputator import Reputator, get_reputator_string
-from nebula.core.SDFL.Validators.validator import Validator, get_validator_string
+from nebula.core.SDFL.Electors.elector import Elector
+from nebula.core.SDFL.Reputators.reputator import Reputator
+from nebula.core.SDFL.Validators.validator import Validator
 
 
 class TrustNode:
@@ -27,8 +27,10 @@ class TrustNode:
         self.elector = elector
         self.validator = validator
         self.reputator = reputator
-        self._leader = None
         self._lock = asyncio.Lock()
+        self.reputations_updated_amount = 0
+        self.round = -1
+        self.trust_info_amount = 0
 
     @property
     def addr(self):
@@ -37,9 +39,9 @@ class TrustNode:
     async def start_communications(self):
         em: EventManager = EventManager.get_instance()
         # Initiate election callback
-        await em.subscribe_node_event(RoundStartEvent, self._elect_leader)
+        await em.subscribe_node_event(ElectionEvent, self._elect_leader)
         # Initiate reputation callback
-        await em.subscribe_node_event(RoundEndEvent, self._update_reputation)
+        await em.subscribe_node_event(RoundStartEvent, self._update_reputation)
         # Initiate validation callback
         await em.subscribe_node_event(ValidationEvent, self._validate_model)
         # Initiate adding trust node callback
@@ -49,36 +51,44 @@ class TrustNode:
         await self.reputator.start_communication()
         await self.validator.start_communication()
 
-    @property
-    def leader(self):
-        return self._leader
+    ## ELECTION CALLBACKS ##
+    async def _elect_leader(self, ee: ElectionEvent):
+        await self.elector.elect(ee, self.represented_nodes)
 
-    async def _elect_leader(self, re: RoundStartEvent):
-        await self.elector.elect(re, self.represented_nodes)
-
-    async def _update_reputation(self, re: RoundEndEvent):
+    ## REPUTATION CALLBACKS ##
+    async def _update_reputation(self, re: RoundStartEvent):
         # self.represented_nodes can be edited from promotions,
         # create copy to iterate over
+        prev_round = self.round
+        self.round, _, _ = await re.get_event_data()
         trustworthy = []
         for r_node in list(self.represented_nodes):
             if r_node == self.addr:
                 continue
-            await self.reputator.update_reputation(r_node, self)
+            # Update Rep for prev round
+            await self.reputator.update_reputation(r_node, prev_round)
             if await self.reputator.is_trustworthy(r_node):
                 trustworthy.append(r_node)
-
-        for r_node in trustworthy:
-            cm: CommunicationsManager = CommunicationsManager.get_instance()
-            m = cm.create_message("trustworthy", "add", node_addr=r_node)
-            for t_node in self.trusted_nodes:
-                if t_node == self.addr:
-                    continue
-                await cm.send_message(t_node, m)
                 await self._add_trust_node(r_node)
 
-    async def _validate_model(self, ve: ValidationEvent):
-        if not await self.validator.validate(ve):
-            logging.info("Validation failed")
+        cm: CommunicationsManager = CommunicationsManager.get_instance()
+        m = cm.create_message("trustworthy", "add", node_addr=trustworthy)
+        for t_node in self.trusted_nodes:
+            if t_node == self.addr:
+                continue
+            await cm.send_message(t_node, m)
+
+        await self._reputation_updated()
+
+    async def _reputation_updated(self):
+        async with self._lock:
+            self.reputations_updated_amount += 1
+        if len(self.trusted_nodes) == self.reputations_updated_amount:
+            # reset msg to 0 for next round
+            self.reputations_updated_amount = 0
+            em: EventManager = EventManager.get_instance()
+            # initiate election once trust nodes have been properly updated
+            await em.publish_node_event(ElectionEvent(self.round))
 
     async def _adjust_represented(self, new_rep):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
@@ -99,30 +109,54 @@ class TrustNode:
                 removed_nodes.append(n)
         return removed_nodes
 
-    async def _add_trust_node_callback(self, source, message):
-        if source not in self.trusted_nodes:
-            return
-        await self._add_trust_node(message.node_addr)
-
     async def _add_trust_node(self, node_addr):
         rep = await self._adjust_represented(node_addr)
-        if rep:
-            cm: CommunicationsManager = CommunicationsManager.get_instance()
-            m = cm.create_message(
-                "info",
-                "trust_info",
-                validator=get_validator_string(type[self.validator]),
-                reputator=get_reputator_string(type[self.reputator]),
-                elector=get_elector_string(type[self.elector]),
-                trusted=list(self.trusted_nodes),
-                represented=rep,
-            )
-            await cm.send_message(node_addr, m)
+        cm: CommunicationsManager = CommunicationsManager.get_instance()
+        m = cm.create_message(
+            "info",
+            "trust_info",
+            trusted=list(self.trusted_nodes),
+            represented=rep,
+        )
+        await cm.send_message(node_addr, m)
+
         async with self._lock:
             self.trusted_nodes.add(node_addr)
         em: EventManager = EventManager.get_instance()
         await em.publish_node_event(TrustNodeAddedEvent(node_addr))
 
-    async def update_represented(self, rep):
+    ## VALIDATION CALLBACKS ##
+    async def _validate_model(self, ve: ValidationEvent):
+        if not await self.validator.validate(ve):
+            logging.info("Validation failed")
+
+    ## MSG CALLBACKS ##
+    async def _add_trust_node_callback(self, source, message):
+        if source not in self.trusted_nodes:
+            return
+        new_nodes = message.node_addr
+        for n in new_nodes:
+            await self._add_trust_node(n)
+        await self._reputation_updated()
+
+    ## PROMOTION ##
+    async def update_represented(self, source, message, round_num):
         async with self._lock:
-            self.represented_nodes.update(rep)
+            self.trust_info_amount += 1
+            self.trusted_nodes.update(message.trusted)
+            self.represented_nodes.update(message.represented)
+
+        # wait until all trustworthy nodes have updated the new node
+        # len(self.trusted_nodes) - 1, since trusted_nodes include this node
+        if len(self.trusted_nodes) - 1 == self.trust_info_amount:
+            # send msg to other trust nodes to confirm it being ready
+            cm: CommunicationsManager = CommunicationsManager.get_instance()
+            m = cm.create_message("trustworthy", "add", node_addr=[])
+            for t_node in self.trusted_nodes:
+                if t_node == self.addr:
+                    continue
+                await cm.send_message(t_node, m)
+
+            # start election
+            em: EventManager = EventManager.get_instance()
+            await em.publish_node_event(ElectionEvent(round_num))

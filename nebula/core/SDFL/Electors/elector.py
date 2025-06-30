@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import LeaderElectedEvent, RoundStartEvent
+from nebula.core.nebulaevents import ElectionEvent, LeaderElectedEvent
 
 
 class InvalidElectorError(ValueError):
@@ -28,11 +28,11 @@ class Elector(ABC):
     """
 
     @abstractmethod
-    async def elect(self, re: RoundStartEvent, rep: set[str]):
+    async def elect(self, ee: ElectionEvent, rep: set[str]):
         """
         Elects a leader for the aggregation.
         Args:
-            re: ElectionEvent object
+            ee: ElectionEvent object
             rep: list of represented nodes
         Returns: Address of the leader.
         """

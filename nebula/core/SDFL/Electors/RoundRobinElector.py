@@ -2,7 +2,7 @@ import asyncio
 import secrets
 
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import RoundStartEvent, TrustNodeAddedEvent
+from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.SDFL.Electors.elector import Elector, publish_election_event
 
@@ -24,13 +24,13 @@ class RoundRobinElector(Elector):
     def addr(self):
         return f"{self.ip}:{self.port}"
 
-    async def elect(self, re: RoundStartEvent, rep: set[str]):
+    async def elect(self, ee: ElectionEvent, rep: set[str]):
         async with self.lock:
             self.rep = rep
 
         if self.trust_nodes[self.current] == self.addr:
             leader = secrets.choice(list(rep))
-            r, _, _ = await re.get_event_data()
+            r = await ee.get_event_data()
             await self._send_choice(leader, r, rep)
             await publish_election_event(leader, r)
 

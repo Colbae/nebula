@@ -97,7 +97,7 @@ class MessagesManager:
             "trustworthy": {"parameters": ["action", "node_addr"], "defaults": {}},
             "representative": {"parameters": ["action", "node_addr"], "defaults": {}},
             "info": {
-                "parameters": ["action", "represented", "trusted", "validator", "elector", "reputator"],
+                "parameters": ["action", "represented", "trusted"],
                 "defaults": {"represented": [], "trusted": []},
             },
             "leader": {"parameters": ["action", "leader_addr", "round"], "defaults": {}},

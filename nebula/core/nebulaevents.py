@@ -406,6 +406,22 @@ class LeaderElectedEvent(NodeEvent):
         return False
 
 
+class ElectionEvent(NodeEvent):
+    """Event to start elections."""
+
+    def __init__(self, round_num):
+        self._round = round_num
+
+    def __str__(self):
+        return f"Election for round {self._round}"
+
+    async def get_event_data(self):
+        return self._round
+
+    async def is_concurrent(self):
+        return False
+
+
 class TrustNodeAddedEvent(NodeEvent):
     def __init__(self, node_addr):
         self._node_addr = node_addr

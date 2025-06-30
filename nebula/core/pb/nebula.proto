@@ -141,7 +141,7 @@ message TrustworthyMessage {
     ADD = 0;
   }
   Action action = 1;
-  string node_addr = 2; //Address of newly trustworthy node
+  repeated string node_addr = 2; //Addresses of newly trustworthy node
 }
 
 message RepresentativeMessage {
@@ -160,9 +160,6 @@ message InfoMessage {
   Action action = 1;
   repeated string represented = 2;
   repeated string trusted = 3;
-  string validator = 4;
-  string elector = 5;
-  string reputator = 6;
 }
 
 message  LeaderMessage {
