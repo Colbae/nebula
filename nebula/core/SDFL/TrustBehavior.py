@@ -1,15 +1,16 @@
 import asyncio
 import logging
 
-from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, RoundStartEvent, TrustNodeAddedEvent, ValidationEvent
-from nebula.core.network.communications import CommunicationsManager
 from nebula.core.SDFL.Electors.elector import Elector
 from nebula.core.SDFL.Reputators.reputator import Reputator
 from nebula.core.SDFL.Validators.validator import Validator
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent, ValidationEvent, \
+    ReputationEvent
+from nebula.core.network.communications import CommunicationsManager
 
 
-class TrustNode:
+class TrustBehavior:
     def __init__(
         self,
         represented_nodes,
@@ -36,31 +37,31 @@ class TrustNode:
     def addr(self):
         return f"{self.ip}:{self.port}"
 
-    async def start_communications(self):
+    async def subscribe_to_events(self):
         em: EventManager = EventManager.get_instance()
         # Initiate election callback
         await em.subscribe_node_event(ElectionEvent, self._elect_leader)
         # Initiate reputation callback
-        await em.subscribe_node_event(RoundStartEvent, self._update_reputation)
+        await em.subscribe_node_event(ReputationEvent, self._update_reputation)
         # Initiate validation callback
         await em.subscribe_node_event(ValidationEvent, self._validate_model)
         # Initiate adding trust node callback
         await em.subscribe(("trustworthy", "add"), self._add_trust_node_callback)
 
-        await self.elector.start_communication()
-        await self.reputator.start_communication()
-        await self.validator.start_communication()
+        await self.elector.subscribe_to_events()
+        await self.reputator.subscribe_to_events()
+        await self.validator.subscribe_to_events()
 
     ## ELECTION CALLBACKS ##
     async def _elect_leader(self, ee: ElectionEvent):
         await self.elector.elect(ee, self.represented_nodes)
 
     ## REPUTATION CALLBACKS ##
-    async def _update_reputation(self, re: RoundStartEvent):
+    async def _update_reputation(self, re: ReputationEvent):
         # self.represented_nodes can be edited from promotions,
         # create copy to iterate over
         prev_round = self.round
-        self.round, _, _ = await re.get_event_data()
+        self.round = await re.get_event_data()
         trustworthy = []
         for r_node in list(self.represented_nodes):
             if r_node == self.addr:

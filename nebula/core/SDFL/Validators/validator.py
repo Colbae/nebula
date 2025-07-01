@@ -28,7 +28,7 @@ class Validator(ABC):
         pass
 
     @abstractmethod
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         """
         Subscribes to relevant events
         """

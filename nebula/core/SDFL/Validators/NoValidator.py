@@ -12,5 +12,5 @@ class NoValidator(Validator):
         """
         return True
 
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         pass

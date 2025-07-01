@@ -18,5 +18,5 @@ class NoReputator(Reputator):
         """
         return False
 
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         pass

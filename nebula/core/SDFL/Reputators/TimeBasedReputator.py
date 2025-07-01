@@ -1,8 +1,8 @@
 import asyncio
 
+from nebula.core.SDFL.Reputators.reputator import Reputator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import LeaderElectedEvent
-from nebula.core.SDFL.Reputators.reputator import Reputator
 
 
 class TimeBasedReputator(Reputator):
@@ -18,7 +18,7 @@ class TimeBasedReputator(Reputator):
         # Dict from node to score, score is a tuple of form (join_time, leader_num)
         self.nodes: dict[str, tuple[int, int]] = {}
 
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         await EventManager.get_instance().subscribe_node_event(LeaderElectedEvent, self._leader_elected)
 
     async def _get_leader(self, r):

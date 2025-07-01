@@ -1,10 +1,10 @@
 import asyncio
 import secrets
 
-from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent
-from nebula.core.network.communications import CommunicationsManager
 from nebula.core.SDFL.Electors.elector import Elector, publish_election_event
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent, LeaderElectedEvent
+from nebula.core.network.communications import CommunicationsManager
 
 
 class RoundRobinElector(Elector):
@@ -32,13 +32,13 @@ class RoundRobinElector(Elector):
             leader = secrets.choice(list(rep))
             r = await ee.get_event_data()
             await self._send_choice(leader, r, rep)
-            await publish_election_event(leader, r)
+            await publish_election_event(leader, self.addr, r)
 
         self.current = (self.current + 1) % len(self.trust_nodes)
 
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         em: EventManager = EventManager.get_instance()
-        await em.subscribe(("leader", "elect"), self._leader_received)
+        await em.subscribe_node_event(LeaderElectedEvent, self._leader_received)
         await em.subscribe_node_event(TrustNodeAddedEvent, self._add_node)
 
     async def _send_choice(self, leader, round_num, rep, trusted=True):
@@ -54,12 +54,11 @@ class RoundRobinElector(Elector):
                 continue
             await cm.send_message(n, m)
 
-    async def _leader_received(self, source, message):
+    async def _leader_received(self, lee: LeaderElectedEvent):
+        leader, source, r = await lee.get_event_data()
         if source not in self.trust_nodes:
             return
 
-        r = message.round
-        leader = message.leader_addr
         await self._send_choice(leader, r, self.rep, trusted=False)
 
     async def _add_node(self, te: TrustNodeAddedEvent):

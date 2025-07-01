@@ -10,9 +10,9 @@ class InvalidElectorError(ValueError):
         super().__init__(f"Invalid reputator type: '{e_type}'")
 
 
-async def publish_election_event(leader, round_num):
+async def publish_election_event(leader, source, round_num):
     em: EventManager = EventManager.get_instance()
-    le = LeaderElectedEvent(leader, round_num)
+    le = LeaderElectedEvent(leader, source, round_num)
     await em.publish_node_event(le)
 
 
@@ -39,7 +39,7 @@ class Elector(ABC):
         pass
 
     @abstractmethod
-    async def start_communication(self):
+    async def subscribe_to_events(self):
         """
         Subscribes to relevant events
         """

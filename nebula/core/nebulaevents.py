@@ -264,7 +264,8 @@ class NodeFoundEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
+
 class ModelPropagationEvent(NodeEvent):
     def __init__(self, eligible_neighbors, strategy):
         """Event triggered when model propagation is ready.
@@ -275,7 +276,7 @@ class ModelPropagationEvent(NodeEvent):
         """
         self.eligible_neighbors = eligible_neighbors
         self._strategy = strategy
-        
+
     def __str__(self):
         return f"Model propagation event, strategy: {self._strategy}"
 
@@ -291,8 +292,7 @@ class ModelPropagationEvent(NodeEvent):
         return (self.eligible_neighbors, self._strategy)
 
     async def is_concurrent(self) -> bool:
-        return False    
-            
+        return False
 
 
 class UpdateReceivedEvent(NodeEvent):
@@ -362,7 +362,8 @@ class BeaconRecievedEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
+
 class DuplicatedMessageEvent(NodeEvent):
     """
     Event triggered when a message is received that has already been processed.
@@ -370,7 +371,7 @@ class DuplicatedMessageEvent(NodeEvent):
     Attributes:
         source (str): The address of the node that sent the duplicated message.
     """
-    
+
     def __init__(self, source: str, message_type: str):
         self.source = source
 
@@ -383,10 +384,11 @@ class DuplicatedMessageEvent(NodeEvent):
     async def is_concurrent(self) -> bool:
         return True
 
+
 class LeaderElectedEvent(NodeEvent):
     """Event triggered when a leader election is completed."""
 
-    def __init__(self, leader, round_num):
+    def __init__(self, leader, source, round_num):
         """
         Initializes an LeaderElectedEvent.
         Args:
@@ -394,13 +396,30 @@ class LeaderElectedEvent(NodeEvent):
             round_num (int): Round number.
         """
         self._leader = leader
+        self._source = source
         self._round = round_num
 
     def __str__(self):
         return f"Node {self._leader} elected as leader for round {self._round}"
 
-    async def get_event_data(self) -> tuple[str, int]:
-        return self._leader, self._round
+    async def get_event_data(self) -> tuple[str, str, int]:
+        return self._leader, self._source, self._round
+
+    async def is_concurrent(self) -> bool:
+        return False
+
+
+class ReputationEvent(NodeEvent):
+    """Event to update reputation."""
+
+    def __init__(self, round_num):
+        self._round_num = round_num
+
+    def __str__(self):
+        return f"Updating reputation for round {self._round_num}"
+
+    async def get_event_data(self):
+        return self._round_num
 
     async def is_concurrent(self) -> bool:
         return False
