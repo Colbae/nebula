@@ -12,9 +12,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.config.config import Config
 from nebula.core.SDFL.Electors.elector import create_elector
 from nebula.core.SDFL.Reputators.reputator import create_reputator
-from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
 from nebula.core.SDFL.TrustBehavior import TrustBehavior
-from nebula.core.SDFL.Validators.validator import create_validator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent
 from nebula.core.utils.locker import Locker
@@ -475,6 +473,8 @@ class roleBehaviorException(Exception):
 
 
 def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBehavior | None:
+    from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
+
     if config.participant["scenario_args"]["federation"] == "SDFL":
         if not config.participant["sdfl_args"]["trustworthy"]:
             return SDFLNodeBehavior(
@@ -484,7 +484,6 @@ def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBeha
             )
         else:
             e = create_elector(config)
-            v = create_validator(config)
             r = create_reputator(config)
             tb = TrustBehavior(
                 represented_nodes=config.participant["sdfl_args"]["representated_nodes"],
@@ -492,7 +491,6 @@ def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBeha
                 ip=config.participant["network_args"]["ip"],
                 port=config.participant["network_args"]["port"],
                 elector=e,
-                validator=v,
                 reputator=r,
             )
             return SDFLNodeBehavior(

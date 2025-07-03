@@ -4,10 +4,10 @@ from nebula.config.config import Config
 from nebula.core.SDFL.Electors.elector import create_elector, publish_election_event
 from nebula.core.SDFL.Reputators.reputator import create_reputator
 from nebula.core.SDFL.TrustBehavior import TrustBehavior
-from nebula.core.SDFL.Validators.validator import create_validator
 from nebula.core.engine import Engine
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent, LeaderElectedEvent
+from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent, LeaderElectedEvent, \
+    NewRepresentativeEvent
 from nebula.core.noderole import RoleBehavior, factory_node_role
 
 
@@ -66,12 +66,12 @@ class SDFLNodeBehavior(RoleBehavior):
     async def _update_representative(self, source, message):
         if source == self._representative and self.trust_behavior is None:
             self._representative = message.node_addr
+            EventManager.get_instance().publish_node_event(NewRepresentativeEvent(self._representative))
 
     async def _promote_node(self, source, message):
         if not self._trust_behavior:
             r = create_reputator(self._config)
             e = create_elector(self._config, message.trusted)
-            v = create_validator(self._config)
             trusted = [self.addr]
             rep = [self.addr]
             trusted.extend(message.trusted)
@@ -83,7 +83,6 @@ class SDFLNodeBehavior(RoleBehavior):
                 ip=self._engine.ip,
                 port=self._engine.port,
                 elector=e,
-                validator=v,
                 reputator=r,
             )
             self._representative = None

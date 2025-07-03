@@ -1,12 +1,10 @@
 import asyncio
-import logging
 
 from nebula.core.SDFL.Electors.elector import Elector
 from nebula.core.SDFL.Reputators.reputator import Reputator
-from nebula.core.SDFL.Validators.validator import Validator
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent, ValidationEvent, \
-    ReputationEvent
+from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent, ReputationEvent, RepresantativesUpdateEvent, \
+    PromotionEvent
 from nebula.core.network.communications import CommunicationsManager
 
 
@@ -18,7 +16,6 @@ class TrustBehavior:
         ip,
         port,
         elector: Elector,
-        validator: Validator,
         reputator: Reputator,
     ):
         self.represented_nodes = set(represented_nodes)
@@ -26,7 +23,6 @@ class TrustBehavior:
         self.ip = ip
         self.port = port
         self.elector = elector
-        self.validator = validator
         self.reputator = reputator
         self._lock = asyncio.Lock()
         self.reputations_updated_amount = 0
@@ -43,14 +39,11 @@ class TrustBehavior:
         await em.subscribe_node_event(ElectionEvent, self._elect_leader)
         # Initiate reputation callback
         await em.subscribe_node_event(ReputationEvent, self._update_reputation)
-        # Initiate validation callback
-        await em.subscribe_node_event(ValidationEvent, self._validate_model)
         # Initiate adding trust node callback
         await em.subscribe(("trustworthy", "add"), self._add_trust_node_callback)
 
         await self.elector.subscribe_to_events()
         await self.reputator.subscribe_to_events()
-        await self.validator.subscribe_to_events()
 
     ## ELECTION CALLBACKS ##
     async def _elect_leader(self, ee: ElectionEvent):
@@ -108,6 +101,7 @@ class TrustBehavior:
                 await cm.send_message(n, m)
                 self.represented_nodes.remove(n)
                 removed_nodes.append(n)
+        await EventManager.get_instance().publish_node_event(RepresantativesUpdateEvent(self.represented_nodes))
         return removed_nodes
 
     async def _add_trust_node(self, node_addr):
@@ -125,11 +119,6 @@ class TrustBehavior:
             self.trusted_nodes.add(node_addr)
         em: EventManager = EventManager.get_instance()
         await em.publish_node_event(TrustNodeAddedEvent(node_addr))
-
-    ## VALIDATION CALLBACKS ##
-    async def _validate_model(self, ve: ValidationEvent):
-        if not await self.validator.validate(ve):
-            logging.info("Validation failed")
 
     ## MSG CALLBACKS ##
     async def _add_trust_node_callback(self, source, message):
@@ -157,6 +146,9 @@ class TrustBehavior:
                 if t_node == self.addr:
                     continue
                 await cm.send_message(t_node, m)
+
+            await EventManager.get_instance().publish_node_event(
+                PromotionEvent(self.represented_nodes, self.trusted_nodes))
 
             # start election
             em: EventManager = EventManager.get_instance()

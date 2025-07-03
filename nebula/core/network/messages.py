@@ -101,6 +101,7 @@ class MessagesManager:
                 "defaults": {"represented": [], "trusted": []},
             },
             "leader": {"parameters": ["action", "leader_addr", "round"], "defaults": {}},
+            "validation": {"parameters": ["action", "tested", "valid"], "defaults": {}},
             # Add additional message types here
         }
 

@@ -18,11 +18,12 @@ class Validator(ABC):
     """
 
     @abstractmethod
-    async def validate(self, model) -> bool:
+    async def validate(self, model, round_num) -> bool:
         """
         Validates a proposed model.
         Args:
             model: The model to validate.
+            round_num: The current round number.
         Returns: True if the proposed model meets the required standards.
         """
         pass
@@ -35,14 +36,17 @@ class Validator(ABC):
         pass
 
 
-def create_validator(config: Config) -> Validator:
-    from nebula.core.SDFL.Validators.NoValidator import NoValidator
+def create_validator(config: Config, model, datamodule) -> Validator:
+    from nebula.core.validator.NoValidator import NoValidator
+    from nebula.core.SDFL.SDFLValidators.SDFLAccuracyValidator import SDFLAccuracyValidator
 
     v_type = config.participant["sdfl_args"]["validator"]
     match v_type:
         case "NoValidator":
             return NoValidator()
-    raise InvalidValidatorError(v_type)
+        case "SDFLAccuracyValidator":
+            return SDFLAccuracyValidator(config=config, model=model, datamodule=datamodule)
+    return NoValidator()
 
 
 def get_validator_string(rep: type[Validator]) -> str:

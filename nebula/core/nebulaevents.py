@@ -455,6 +455,49 @@ class TrustNodeAddedEvent(NodeEvent):
         return False
 
 
+class RepresantativesUpdateEvent(NodeEvent):
+    def __init__(self, reps):
+        self._reps = reps
+
+    def __str__(self):
+        return f"Represantative updated to {self._reps}"
+
+    async def get_event_data(self):
+        return self._reps
+
+    async def is_concurrent(self):
+        return False
+
+
+class PromotionEvent(NodeEvent):
+    def __init__(self, reps, trust):
+        self._reps = reps
+        self._trust = trust
+
+    def __str__(self):
+        return f"Node promoted"
+
+    async def get_event_data(self):
+        return self._reps, self._trust
+
+    async def is_concurrent(self):
+        return False
+
+
+class NewRepresentativeEvent(NodeEvent):
+    def __init__(self, rep):
+        self._rep = rep
+
+    def __str__(self):
+        return f"New representative {self._rep}"
+
+    async def get_event_data(self):
+        return self._rep
+
+    async def is_concurrent(self):
+        return False
+
+
 class ValidationEvent(NodeEvent):
     def __init__(self, model):
         self._model = model

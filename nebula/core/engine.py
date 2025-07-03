@@ -26,6 +26,7 @@ from nebula.core.noderole import factory_role_behavior, change_role_behavior, Ro
 from nebula.core.role import Role
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
 from nebula.core.utils.locker import Locker
+from nebula.core.validator.validator import create_validator
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -157,6 +158,7 @@ class Engine:
         event_manager = EventManager.get_instance(verbose=False)
         self._addon_manager = AddondManager(self, self.config)
 
+        self.validator = create_validator(config=self.config, model=model, datamodule=datamodule)
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
@@ -601,6 +603,7 @@ class Engine:
         initial_neighbors = self.config.participant["network_args"]["neighbors"].split()
         await self.cm.start_communications(initial_neighbors)
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
+        await self.validator.subscribe_to_events()
 
         from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
 

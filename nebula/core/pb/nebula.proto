@@ -30,6 +30,7 @@ message Wrapper {
     RepresentativeMessage representative_message = 13;
     InfoMessage info_message = 14;
     LeaderMessage leader_message = 15;
+    ValidationMessage validation_message = 16;
   }
 }
 
@@ -161,6 +162,17 @@ message InfoMessage {
   repeated string represented = 2;
   repeated string trusted = 3;
 }
+
+message ValidationMessage{
+  enum Action {
+    VOTE = 0;
+    INFO = 1;
+  }
+  Action action = 1;
+  bool tested = 2;
+  bool valid = 3;
+}
+
 
 message  LeaderMessage {
   enum Action {

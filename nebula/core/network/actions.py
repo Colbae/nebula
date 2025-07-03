@@ -100,6 +100,11 @@ class LeaderAction(Enum):
     ELECT = nebula_pb2.LeaderMessage.Action.ELECT
 
 
+class ValidationAction(Enum):
+    VOTE = nebula_pb2.ValidationMessage.Action.VOTE
+    INFO = nebula_pb2.ValidationMessage.Action.INFO
+
+
 # Mapping between message type strings and their corresponding Enum classes
 ACTION_CLASSES = {
     "connection": ConnectionAction,
@@ -114,6 +119,7 @@ ACTION_CLASSES = {
     "representative": RepresentativeAction,
     "info": InfoAction,
     "leader": LeaderAction,
+    "validation": ValidationAction,
 }
 
 

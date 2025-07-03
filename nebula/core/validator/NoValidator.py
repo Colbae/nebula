@@ -1,4 +1,4 @@
-from nebula.core.SDFL.Validators.validator import Validator
+from nebula.core.validator.validator import Validator
 
 
 class NoValidator(Validator):
