@@ -47,7 +47,8 @@ class TrustBehavior:
 
     ## ELECTION CALLBACKS ##
     async def _elect_leader(self, ee: ElectionEvent):
-        await self.elector.elect(ee, self.represented_nodes)
+        r, e = await ee.get_event_data()
+        await self.elector.elect(r, e, self.represented_nodes)
 
     ## REPUTATION CALLBACKS ##
     async def _update_reputation(self, re: ReputationEvent):

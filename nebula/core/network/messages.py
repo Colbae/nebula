@@ -100,7 +100,7 @@ class MessagesManager:
                 "parameters": ["action", "represented", "trusted"],
                 "defaults": {"represented": [], "trusted": []},
             },
-            "leader": {"parameters": ["action", "leader_addr", "round"], "defaults": {}},
+            "leader": {"parameters": ["action", "leader_addr", "round", "election_num"], "defaults": {}},
             "validation": {"parameters": ["action", "tested", "valid"], "defaults": {}},
             # Add additional message types here
         }

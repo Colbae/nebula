@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, LeaderElectedEvent
+from nebula.core.nebulaevents import LeaderElectedEvent
 
 
 class InvalidElectorError(ValueError):
@@ -10,9 +10,9 @@ class InvalidElectorError(ValueError):
         super().__init__(f"Invalid reputator type: '{e_type}'")
 
 
-async def publish_election_event(leader, source, round_num):
+async def publish_election_event(leader, source, round_num, election_num):
     em: EventManager = EventManager.get_instance()
-    le = LeaderElectedEvent(leader, source, round_num)
+    le = LeaderElectedEvent(leader, source, round_num, election_num)
     await em.publish_node_event(le)
 
 
@@ -28,11 +28,12 @@ class Elector(ABC):
     """
 
     @abstractmethod
-    async def elect(self, ee: ElectionEvent, rep: set[str]):
+    async def elect(self, round_num: int, election_num: int, rep: set[str]):
         """
         Elects a leader for the aggregation.
         Args:
-            ee: ElectionEvent object
+            round_num: Number of current round
+            election_num: Number of current election
             rep: list of represented nodes
         Returns: Address of the leader.
         """

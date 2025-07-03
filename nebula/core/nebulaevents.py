@@ -388,22 +388,25 @@ class DuplicatedMessageEvent(NodeEvent):
 class LeaderElectedEvent(NodeEvent):
     """Event triggered when a leader election is completed."""
 
-    def __init__(self, leader, source, round_num):
+    def __init__(self, leader, source, round_num, election_num):
         """
         Initializes an LeaderElectedEvent.
         Args:
             leader (str): Node elected as leader.
+            source (str): The address of the node that sent the leader election.
             round_num (int): Round number.
+            election_num (int): Election number.
         """
         self._leader = leader
         self._source = source
         self._round = round_num
+        self._election_num = election_num
 
     def __str__(self):
         return f"Node {self._leader} elected as leader for round {self._round}"
 
-    async def get_event_data(self) -> tuple[str, str, int]:
-        return self._leader, self._source, self._round
+    async def get_event_data(self) -> tuple[str, str, int, int]:
+        return self._leader, self._source, self._round, self._election_num
 
     async def is_concurrent(self) -> bool:
         return False
@@ -428,17 +431,18 @@ class ReputationEvent(NodeEvent):
 class ElectionEvent(NodeEvent):
     """Event to start elections."""
 
-    def __init__(self, round_num):
+    def __init__(self, round_num, election_num=0):
         self._round = round_num
+        self._election_num = election_num
 
     def __str__(self):
         return f"Election for round {self._round}"
 
     async def get_event_data(self):
-        return self._round
+        return self._round, self._election_num
 
     async def is_concurrent(self):
-        return False
+        return True
 
 
 class TrustNodeAddedEvent(NodeEvent):
@@ -452,7 +456,21 @@ class TrustNodeAddedEvent(NodeEvent):
         return self._node_addr
 
     async def is_concurrent(self) -> bool:
-        return False
+        return True
+
+
+class ValidationFailedEvent(NodeEvent):
+    def __init__(self, round_num):
+        self._round = round_num
+
+    def __str__(self):
+        return f"Validation failed for round {self._round}"
+
+    async def get_event_data(self):
+        return self._round
+
+    async def is_concurrent(self):
+        return True
 
 
 class RepresantativesUpdateEvent(NodeEvent):

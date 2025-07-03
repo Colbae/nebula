@@ -3,7 +3,7 @@ import secrets
 
 from nebula.core.SDFL.Electors.elector import Elector, publish_election_event
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import ElectionEvent, TrustNodeAddedEvent, LeaderElectedEvent
+from nebula.core.nebulaevents import TrustNodeAddedEvent, LeaderElectedEvent
 from nebula.core.network.communications import CommunicationsManager
 
 
@@ -24,15 +24,14 @@ class RoundRobinElector(Elector):
     def addr(self):
         return f"{self.ip}:{self.port}"
 
-    async def elect(self, ee: ElectionEvent, rep: set[str]):
+    async def elect(self, round_num: int, election_num: int, rep: set[str]):
         async with self.lock:
             self.rep = rep
 
         if self.trust_nodes[self.current] == self.addr:
             leader = secrets.choice(list(rep))
-            r = await ee.get_event_data()
-            await self._send_choice(leader, r, rep)
-            await publish_election_event(leader, self.addr, r)
+            await self._send_choice(leader, round_num, rep, election_num)
+            await publish_election_event(leader, self.addr, round_num, election_num)
 
         self.current = (self.current + 1) % len(self.trust_nodes)
 
@@ -41,9 +40,9 @@ class RoundRobinElector(Elector):
         await em.subscribe_node_event(LeaderElectedEvent, self._leader_received)
         await em.subscribe_node_event(TrustNodeAddedEvent, self._add_node)
 
-    async def _send_choice(self, leader, round_num, rep, trusted=True):
+    async def _send_choice(self, leader, round_num, rep, election_num, trusted=True):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
-        m = cm.create_message("leader", "elect", leader_addr=leader, round=round_num)
+        m = cm.create_message("leader", "elect", leader_addr=leader, round=round_num, election_num=election_num)
         if trusted:
             for n in self.trust_nodes:
                 if n == self.addr:
@@ -55,11 +54,11 @@ class RoundRobinElector(Elector):
             await cm.send_message(n, m)
 
     async def _leader_received(self, lee: LeaderElectedEvent):
-        leader, source, r = await lee.get_event_data()
+        leader, source, r, e_num = await lee.get_event_data()
         if source not in self.trust_nodes:
             return
 
-        await self._send_choice(leader, r, self.rep, trusted=False)
+        await self._send_choice(leader, r, self.rep, e_num, trusted=False)
 
     async def _add_node(self, te: TrustNodeAddedEvent):
         node_addr = await te.get_event_data()

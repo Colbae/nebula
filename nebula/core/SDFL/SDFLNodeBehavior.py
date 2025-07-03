@@ -7,7 +7,7 @@ from nebula.core.SDFL.TrustBehavior import TrustBehavior
 from nebula.core.engine import Engine
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent, LeaderElectedEvent, \
-    NewRepresentativeEvent
+    NewRepresentativeEvent, ElectionEvent
 from nebula.core.noderole import RoleBehavior, factory_node_role
 
 
@@ -27,7 +27,7 @@ class SDFLNodeBehavior(RoleBehavior):
         self._trust_behavior: TrustBehavior = trust_behavior
 
         # Dictionary from round => leader to prevent race conditions
-        self._leader = {}
+        self._leader: dict[int, dict[int, str]] = {}
 
     @property
     def trust_behavior(self):
@@ -37,14 +37,14 @@ class SDFLNodeBehavior(RoleBehavior):
     def addr(self):
         return f"{self._engine.ip}:{self._engine.port}"
 
-    async def _get_leader(self, r):
+    async def _get_leader(self, r_num, e_num) -> str:
         """
         Safe leader retrieval, retrievs leader of current round.
         Avoids potential KeyErrors from dict retrieval.
         Waits for the leader to be updated.
         """
         while True:
-            leader = self._leader.get(r, None)
+            leader = self._leader.get(r_num, {}).get(e_num, None)
             if leader is not None:
                 return leader
             await asyncio.sleep(0.5)
@@ -90,17 +90,27 @@ class SDFLNodeBehavior(RoleBehavior):
         await self._trust_behavior.update_represented(source, message, self._engine.round)
 
     async def _update_leader(self, lee: LeaderElectedEvent):
-        leader, source, r = await lee.get_event_data()
-        # Leader msg must come from rep or from trustworthy peerstarting training..
+        leader, source, r, e_num = await lee.get_event_data()
+
+        # Leader msg must come from rep or from trustworthy peerstarting training.
         if source != self._representative and (
             self.trust_behavior is not None and source not in self._trust_behavior.trusted_nodes):
-            print(f"source {source}, trusted {self._representative}")
             return
         async with self._lock:
-            self._leader[r] = leader
+            self._leader.setdefault(r, {})[e_num] = leader
 
     async def _election_event(self, source, message):
-        await publish_election_event(message.leader_addr, source, message.round)
+        await publish_election_event(message.leader_addr, source, message.round, message.election_num)
+
+    async def redo_aggregation(self, aggregation_num):
+        em: EventManager = EventManager.get_instance()
+        # initiate election once trust nodes have been properly updated
+        await em.publish_node_event(ElectionEvent(self._engine.round, aggregation_num))
+        nodes = await self.select_nodes_to_wait(aggregation_num)
+
+        await self._engine.aggregator.update_federation_nodes(nodes)
+        await self.after_learning_cycle(aggregation_num)
+        return await self._engine.aggregator.get_aggregation()
 
     ## ABC-METHOD IMPLEMENTATIONS ##
 
@@ -116,22 +126,28 @@ class SDFLNodeBehavior(RoleBehavior):
         await self._engine.trainer.train()
         await self._engine.trainning_in_progress_lock.release_async()
 
+        await self.after_learning_cycle()
+
+        await self._engine._waiting_model_updates()
+
+    async def after_learning_cycle(self, election_num=0):
         # If this node is leader act as aggregator
-        if await self._get_leader(self._engine.round) == self.addr:
+
+        leader = await self._get_leader(self._engine.round, election_num)
+
+        if leader == self.addr:
             self_update_event = UpdateReceivedEvent(
                 self._engine.trainer.get_model_parameters(), self._engine.trainer.get_model_weight(), self._engine.addr,
                 self._engine.round
             )
             await EventManager.get_instance().publish_node_event(self_update_event)
-
         mpe = ModelPropagationEvent(
             await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
         await EventManager.get_instance().publish_node_event(mpe)
-        await self._engine._waiting_model_updates()
 
-    async def select_nodes_to_wait(self):
+    async def select_nodes_to_wait(self, election_num=0):
         # only wait for leader update
-        leader = await self._get_leader(self._engine.round)
+        leader = await self._get_leader(self._engine.round, election_num)
         if self.addr == leader:
             return await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return {leader}

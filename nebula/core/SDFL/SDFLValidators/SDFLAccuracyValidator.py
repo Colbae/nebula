@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import secrets
 import traceback
 
 from lightning import Trainer
@@ -206,6 +207,7 @@ class SDFLAccuracyValidator(Validator):
                 rejects += 1
 
         async with self._lock:
+            self.received_votes = []
             self.valid = accepts >= rejects
 
     async def _send_decision(self):
@@ -261,4 +263,7 @@ class SDFLAccuracyValidator(Validator):
         else:
             await self._await_decision()
 
-        return self.valid
+        valid = self.valid
+        async with self._lock:
+            self.valid = None
+        return valid

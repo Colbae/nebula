@@ -181,4 +181,5 @@ message  LeaderMessage {
   Action action = 1;
   string leader_addr = 2;
   int32 round = 3;
+  int32 election_num = 4;
 }

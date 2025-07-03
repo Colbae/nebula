@@ -159,15 +159,18 @@ class SDFLUpdateHandler(UpdateHandler):
                     f"Storage Update | source={source} | round={round} | weight={weight} | federation nodes: {self._sources_expected}"
                 )
 
-                self._sources_received.add(source)
-                updates_left = self._sources_expected.difference(self._sources_received)
-                logging.info(
-                    f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}"
-                )
-                if self._round_updates_lock.locked() and not updates_left:
-                    all_rec = await self._all_updates_received()
-                    if all_rec:
-                        await self._notify()
+            # always check if all sources were received, as when reaggregating due to validation fail
+            # some received updates might already be present in the storage.
+            self._sources_received.add(source)
+            updates_left = self._sources_expected.difference(self._sources_received)
+            logging.info(
+                f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}"
+            )
+            if self._round_updates_lock.locked() and not updates_left:
+                all_rec = await self._all_updates_received()
+                if all_rec:
+                    await self._notify()
+
             await self._updates_storage_lock.release_async()
         else:
             if source not in self._sources_received:

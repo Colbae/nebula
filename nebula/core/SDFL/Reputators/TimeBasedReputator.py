@@ -34,7 +34,7 @@ class TimeBasedReputator(Reputator):
             await asyncio.sleep(0.5)
 
     async def _leader_elected(self, le: LeaderElectedEvent):
-        leader, r = await le.get_event_data()
+        leader, _, r, _ = await le.get_event_data()
         async with self.lock:
             self.leader[r] = leader
 

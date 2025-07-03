@@ -134,6 +134,9 @@ class RoleBehavior(ABC):
         """
         raise NotImplementedError
 
+    async def redo_aggregation(self, election_num):
+        pass
+
     async def set_next_role(self, role: Role, source_to_notificate=None):
         """
         Schedules a role change and optionally stores the source to notify upon completion.

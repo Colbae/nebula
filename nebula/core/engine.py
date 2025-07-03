@@ -750,6 +750,16 @@ class Engine:
         """
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
+        valid = await self.validator.validate(params, self.round)
+        agg_num = 1
+        while not valid:
+            logging.info("❌ Validation failed.")
+            params = await self.rb.redo_aggregation(agg_num)
+            valid = await self.validator.validate(params, self.round)
+            agg_num += 1
+
+        logging.info("✅ Validation succeeded.")
+
         if params is not None:
             logging.info(
                 f"_waiting_model_updates | Aggregation done for round {self.round}, including parameters in local model."
