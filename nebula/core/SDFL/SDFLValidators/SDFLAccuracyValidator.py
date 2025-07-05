@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import secrets
 import traceback
 
 from lightning import Trainer
@@ -43,7 +42,9 @@ class SDFLAccuracyValidator(Validator):
         self.represented = config.participant["sdfl_args"]["representated_nodes"]
         self.representative = config.participant["sdfl_args"]["representative"]
         self.valid = None
+        self.valid_event = asyncio.Event()
         self.received_votes = []
+        self.received_votes_event = asyncio.Event()
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
 
@@ -82,6 +83,8 @@ class SDFLAccuracyValidator(Validator):
         valid = message.valid
         async with self._lock:
             self.received_votes.append((tested, valid))
+            if len(self.received_votes) == len(self.trust_nodes):
+                self.received_votes_event.set()
 
     async def _update_rep(self, re: NewRepresentativeEvent):
         r = re.get_event_data()
@@ -91,9 +94,10 @@ class SDFLAccuracyValidator(Validator):
     async def _validation_info(self, source, message):
         if source != self.representative:
             return
-        valid = message.valid
+
         async with self._lock:
-            self.valid = valid
+            self.valid = message.valid
+            self.valid_event.set()
 
     async def _add_node(self, te: TrustNodeAddedEvent):
         node = await te.get_event_data()
@@ -184,27 +188,25 @@ class SDFLAccuracyValidator(Validator):
             return None, None
 
     async def _await_decision(self):
-        while True:
-            if self.valid is not None:
-                return
-            await asyncio.sleep(0.5)
+        await self.valid_event.wait()
+        self.valid_event.clear()
+        return
 
     async def _await_voting(self):
-        while True:
-            if len(self.received_votes) == len(self.trust_nodes):
-                break
-            await asyncio.sleep(0.5)
+        await self.received_votes_event.wait()
+
+        async with self._lock:
+            votes_to_process = self.received_votes
+            self.received_votes = []
+            self.received_votes_event.clear()
 
         accepts = 0
         rejects = 0
-        for vote in self.received_votes:
-            # skip nodes where validation failed
-            if not vote[0]:
+        for tested, valid in votes_to_process:
+            if not tested:
                 continue
-            if vote[1]:
-                accepts += 1
-            else:
-                rejects += 1
+            accepts += 1 if valid else 0
+            rejects += 0 if valid else 1
 
         async with self._lock:
             self.received_votes = []
@@ -243,9 +245,11 @@ class SDFLAccuracyValidator(Validator):
                 else:
                     vote = (True, False)
                     self.received_votes.append(vote)
+
+                if len(self.received_votes) == len(self.trust_nodes):
+                    self.received_votes_event.set()
                 self.accuracy[round_num] = accuracy
             await self._send_vote(vote)
-
 
         except Exception as e:
             logging_training.error(f"Error testing model: {e}")
@@ -263,7 +267,4 @@ class SDFLAccuracyValidator(Validator):
         else:
             await self._await_decision()
 
-        valid = self.valid
-        async with self._lock:
-            self.valid = None
-        return valid
+        return self.valid

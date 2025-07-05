@@ -452,7 +452,7 @@ class TrustNodeAddedEvent(NodeEvent):
     def __str__(self):
         return f"Node {self._node_addr} is trusted"
 
-    async def get_event_data(self) -> tuple[str, int]:
+    async def get_event_data(self) -> str:
         return self._node_addr
 
     async def is_concurrent(self) -> bool:

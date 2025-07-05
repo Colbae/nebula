@@ -14,6 +14,7 @@ class TimeBasedReputator(Reputator):
         self.time_limit = time_limit
         self.leader_limit = leader_limit
         self.leader = {}
+        self.leader_queues = {}
         self.lock = asyncio.Lock()
         # Dict from node to score, score is a tuple of form (join_time, leader_num)
         self.nodes: dict[str, tuple[int, int]] = {}
@@ -27,16 +28,26 @@ class TimeBasedReputator(Reputator):
         Avoids potential KeyErrors from dict retrieval.
         Waits for the leader to be updated.
         """
-        while True:
-            leader = self.leader.get(r, None)
-            if leader is not None:
-                return leader
-            await asyncio.sleep(0.5)
+        async with self.lock:
+            if r in self.leader:
+                return self.leader[r]
+
+            if r not in self.leader_queues:
+                self.leader_queues[r] = asyncio.Queue()
+            queue = self.leader_queues[r]
+
+        leader = await queue.get()
+        return leader
 
     async def _leader_elected(self, le: LeaderElectedEvent):
         leader, _, r, _ = await le.get_event_data()
+
         async with self.lock:
             self.leader[r] = leader
+            if r in self.leader_queues:
+                queue = self.leader_queues.pop(r, None)
+                if queue is not None:
+                    await queue.put(leader)
 
     async def update_reputation(self, node: str, r):
         # first round is 0

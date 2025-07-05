@@ -25,9 +25,10 @@ class SDFLNodeBehavior(RoleBehavior):
         self._lock = asyncio.Lock()
         self._representative = representative
         self._trust_behavior: TrustBehavior = trust_behavior
+        self._leader_queues = {}
 
         # Dictionary from round => leader to prevent race conditions
-        self._leader: dict[int, dict[int, str]] = {}
+        self._leader: dict[tuple[int, int], str] = {}
 
     @property
     def trust_behavior(self):
@@ -43,11 +44,19 @@ class SDFLNodeBehavior(RoleBehavior):
         Avoids potential KeyErrors from dict retrieval.
         Waits for the leader to be updated.
         """
-        while True:
-            leader = self._leader.get(r_num, {}).get(e_num, None)
-            if leader is not None:
-                return leader
-            await asyncio.sleep(0.5)
+        key = (r_num, e_num)
+
+        # Check if leader already present, if not start a waiting queue
+        async with self._lock:
+            if key in self._leader:
+                return self._leader[key]
+
+            if key not in self._leader_queues:
+                self._leader_queues[key] = asyncio.Queue()
+            queue = self._leader_queues[key]
+
+        leader = await queue.get()
+        return leader
 
     async def subscribe_to_events(self):
         em: EventManager = EventManager.get_instance()
@@ -90,14 +99,17 @@ class SDFLNodeBehavior(RoleBehavior):
         await self._trust_behavior.update_represented(source, message, self._engine.round)
 
     async def _update_leader(self, lee: LeaderElectedEvent):
-        leader, source, r, e_num = await lee.get_event_data()
-
-        # Leader msg must come from rep or from trustworthy peerstarting training.
+        leader, source, r_num, e_num = await lee.get_event_data()
         if source != self._representative and (
             self.trust_behavior is not None and source not in self._trust_behavior.trusted_nodes):
             return
+
+        key = (r_num, e_num)
         async with self._lock:
-            self._leader.setdefault(r, {})[e_num] = leader
+            self._leader[key] = leader
+            queue = self._leader_queues.pop(key, None)
+            if queue is not None:
+                await queue.put(leader)
 
     async def _election_event(self, source, message):
         await publish_election_event(message.leader_addr, source, message.round, message.election_num)
