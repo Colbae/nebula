@@ -27,7 +27,10 @@ class SDFLNodeBehavior(RoleBehavior):
         self._trust_behavior: TrustBehavior = trust_behavior
         self._leader_queues = {}
 
-        # Dictionary from round => leader to prevent race conditions
+        # Dictionary from (round_num, election_num) => asyncio.Queue to wait for the leader update and retrieve it
+        self._leader_queues: dict[tuple[int, int], asyncio.Queue] = {}
+
+        # Dictionary from (round_num, election_num) => leader to prevent race conditions
         self._leader: dict[tuple[int, int], str] = {}
 
     @property
@@ -75,7 +78,7 @@ class SDFLNodeBehavior(RoleBehavior):
     async def _update_representative(self, source, message):
         if source == self._representative and self.trust_behavior is None:
             self._representative = message.node_addr
-            EventManager.get_instance().publish_node_event(NewRepresentativeEvent(self._representative))
+            await EventManager.get_instance().publish_node_event(NewRepresentativeEvent(self._representative))
 
     async def _promote_node(self, source, message):
         if not self._trust_behavior:

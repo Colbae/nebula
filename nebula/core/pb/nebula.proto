@@ -143,6 +143,7 @@ message TrustworthyMessage {
   }
   Action action = 1;
   repeated string node_addr = 2; //Addresses of newly trustworthy node
+  repeated string rep_addr = 3; //Addresses of the nodes the trust node represents
 }
 
 message RepresentativeMessage {

@@ -110,7 +110,7 @@ class SDFLAccuracyValidator(Validator):
             self.represented = reps
 
     async def _activate_validator(self, te: PromotionEvent):
-        reps, trusted = te.get_event_data()
+        reps, trusted = await te.get_event_data()
         async with self._lock:
             self.represented = reps
             self.trust_nodes = trusted

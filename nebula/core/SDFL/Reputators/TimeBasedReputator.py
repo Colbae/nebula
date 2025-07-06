@@ -14,7 +14,7 @@ class TimeBasedReputator(Reputator):
         self.time_limit = time_limit
         self.leader_limit = leader_limit
         self.leader = {}
-        self.leader_queues = {}
+        self.leader_queues: dict[int, asyncio.Queue] = {}
         self.lock = asyncio.Lock()
         # Dict from node to score, score is a tuple of form (join_time, leader_num)
         self.nodes: dict[str, tuple[int, int]] = {}
