@@ -99,7 +99,10 @@ class TrustBehavior:
             # initiate election once trust nodes have been properly updated
             await em.publish_node_event(ElectionEvent(self.round))
 
-    async def _adjust_represented(self, new_rep):
+    async def _adjust_represented(self, new_reps):
+        if len(new_reps) == 0:
+            return {}
+
         cm: CommunicationsManager = CommunicationsManager.get_instance()
         total_reps = 0
         trust_node_order = list(self.trusted_nodes)

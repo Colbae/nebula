@@ -257,6 +257,8 @@ class SDFLAccuracyValidator(Validator):
             async with self._lock:
                 vote = (False, False)
                 self.received_votes.append(vote)
+                if len(self.received_votes) == len(self.trust_nodes):
+                    self.received_votes_event.set()
             await self._send_vote(vote)
 
     async def validate(self, params, round_num):

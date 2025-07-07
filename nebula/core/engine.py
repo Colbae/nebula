@@ -748,18 +748,29 @@ class Engine:
         This method is called after local training and before proceeding to the next round,
         ensuring the model is synchronized with the federation's latest aggregated state.
         """
+        params = await self.aggregate_models()
+        await self.set_model_params(params)
+        new_params = await self.validate_model(params)
+        if new_params != params:
+            await self.set_model_params(params)
+
+    async def aggregate_models(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
+        return params
+
+    async def validate_model(self, params):
         valid = await self.validator.validate(params, self.round)
         agg_num = 1
         while not valid:
             logging.info("❌ Validation failed.")
             params = await self.rb.redo_aggregation(agg_num)
             valid = await self.validator.validate(params, self.round)
+            await self.set_model_params(params)
             agg_num += 1
-
         logging.info("✅ Validation succeeded.")
 
+    async def set_model_params(self, params):
         if params is not None:
             logging.info(
                 f"_waiting_model_updates | Aggregation done for round {self.round}, including parameters in local model."

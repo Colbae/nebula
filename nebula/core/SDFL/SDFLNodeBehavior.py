@@ -25,7 +25,6 @@ class SDFLNodeBehavior(RoleBehavior):
         self._lock = asyncio.Lock()
         self._representative = representative
         self._trust_behavior: TrustBehavior = trust_behavior
-        self._leader_queues = {}
 
         # Dictionary from (round_num, election_num) => asyncio.Queue to wait for the leader update and retrieve it
         self._leader_queues: dict[tuple[int, int], asyncio.Queue] = {}
@@ -124,8 +123,7 @@ class SDFLNodeBehavior(RoleBehavior):
         nodes = await self.select_nodes_to_wait(aggregation_num)
 
         await self._engine.aggregator.update_federation_nodes(nodes)
-        await self.after_learning_cycle(aggregation_num)
-        return await self._engine.aggregator.get_aggregation()
+        return await self.after_learning_cycle(aggregation_num)
 
     ## ABC-METHOD IMPLEMENTATIONS ##
 
@@ -141,9 +139,8 @@ class SDFLNodeBehavior(RoleBehavior):
         await self._engine.trainer.train()
         await self._engine.trainning_in_progress_lock.release_async()
 
-        await self.after_learning_cycle()
-
-        await self._engine._waiting_model_updates()
+        params = await self.after_learning_cycle()
+        await self._engine.validate_model(params)
 
     async def after_learning_cycle(self, election_num=0):
         # If this node is leader act as aggregator
@@ -156,9 +153,19 @@ class SDFLNodeBehavior(RoleBehavior):
                 self._engine.round
             )
             await EventManager.get_instance().publish_node_event(self_update_event)
+            params = await self._engine.aggregate_models()
+            await self._engine.set_model_params(params)
+            mpe = ModelPropagationEvent(
+                await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
+            await EventManager.get_instance().publish_node_event(mpe)
+            return params
+
         mpe = ModelPropagationEvent(
             await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
         await EventManager.get_instance().publish_node_event(mpe)
+        params = await self._engine.aggregate_models()
+        await self._engine.set_model_params(params)
+        return params
 
     async def select_nodes_to_wait(self, election_num=0):
         # only wait for leader update
