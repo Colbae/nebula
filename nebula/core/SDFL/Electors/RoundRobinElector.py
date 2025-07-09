@@ -9,7 +9,7 @@ from nebula.core.network.communications import CommunicationsManager
 
 class RoundRobinElector(Elector):
     def __init__(self, config, trusted=None):
-        trust_nodes = list(trusted) if trusted is not None else list(config.participant["sdfl_args"]["trusted_nodes"])
+        trust_nodes = list(trusted) if trusted is not None else list(config.participant["sdfl_args"]["trust_nodes"])
         trust_nodes.sort()
 
         self.trust_nodes = trust_nodes

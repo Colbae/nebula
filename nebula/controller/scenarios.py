@@ -110,10 +110,7 @@ class Scenario:
         elector=None,
         validator=None,
         reputator=None,
-        representative=None,
-        trustworthy=None,
-        representated_nodes=None,
-        trusted_nodes=None,
+        trustworthy_amount=0,
     ):
         """
         Initialize a Scenario instance.
@@ -244,10 +241,71 @@ class Scenario:
         self.elector = elector
         self.reputator = reputator
         self.validator = validator
-        self.representative = representative
-        self.trustworthy = trustworthy
-        self.trusted_nodes = trusted_nodes
-        self.representated_nodes = representated_nodes
+        self.trustworthy_amount = trustworthy_amount
+
+    def represenatives_and_trust_assign(
+        self,
+        nodes,
+        trustnode_amount
+    ):
+        import random
+
+        nodes_index = list(nodes.keys())
+        random.shuffle(nodes_index)
+
+        cur_trust = 0
+        trust = []
+        untrust = []
+
+        logging.info(f"nodes type: {type(nodes)}")
+
+        for node in nodes_index:
+            logging.info(f"nodes type: {type(nodes[node])}")
+            if (not nodes[node].get("malicious", False)) and cur_trust < trustnode_amount:
+                trust.append(node)
+                cur_trust += 1
+            else:
+                untrust.append(node)
+
+        if len(trust) < trustnode_amount:
+            raise KeyError("Not enough non-malicious nodes to assign trust roles")
+
+        trust_node_addr = []
+        for node in trust:
+            addr = f'{nodes[node]["ip"]}:{nodes[node]["port"]}'
+            trust_node_addr.append(addr)
+
+        for node in nodes_index:
+            nodes[node]["sdfl_args"] = {}
+            nodes[node]["sdfl_args"]["trust_nodes"] = trust_node_addr
+
+        rep_per_trust = len(untrust) // trustnode_amount
+
+        for node in trust:
+            logging.info(f"NODES: {nodes[node]}")
+
+            addr = f'{nodes[node]["ip"]}:{nodes[node]["port"]}'
+            nodes[node]["sdfl_args"]["representative"] = addr
+            nodes[node]["sdfl_args"]["represented_nodes"] = [addr]
+            rep = []
+            rep.extend(untrust[:rep_per_trust])
+            untrust = untrust[rep_per_trust:]
+
+            for n in rep:
+                n_addr = f'{nodes[n]["ip"]}:{nodes[n]["port"]}'
+                nodes[node]["sdfl_args"]["represented_nodes"].append(n_addr)
+                nodes[n]["sdfl_args"]["representative"] = addr
+
+        for i in range(len(untrust)):
+            t = trust[i]
+            n = untrust[i]
+            n_addr = f'{nodes[n]["ip"]}:{nodes[n]["port"]}'
+            t_addr = f'{nodes[t]["ip"]}:{nodes[t]["port"]}'
+
+            nodes[t]["sdfl_args"]["represented_nodes"].append(n_addr)
+            nodes[n]["sdfl_args"]["representative"] = t_addr
+
+        return nodes
 
     def attack_node_assign(
         self,
@@ -670,7 +728,13 @@ class ScenarioManagement:
         else:
             self.scenario.nodes = self.scenario.mobility_assign(self.scenario.nodes, 0)
 
-        # Save node settings
+        if self.scenario.federation == "SDFL":
+            self.scenario.nodes = self.scenario.represenatives_and_trust_assign(
+                self.scenario.nodes,
+                self.scenario.trustworthy_amount
+            )
+
+            # Save node settings
         for node in self.scenario.nodes:
             node_config = self.scenario.nodes[node]
             participant_file = os.path.join(self.config_dir, f"participant_{node_config['id']}.json")
@@ -708,13 +772,14 @@ class ScenarioManagement:
             participant_config["device_args"]["gpu_id"] = self.scenario.gpu_id
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
-            participant_config["sdfl_args"]["elector"] = self.scenario.elector
-            participant_config["sdfl_args"]["validator"] = self.scenario.validator
-            participant_config["sdfl_args"]["reputator"] = self.scenario.reputator
-            participant_config["sdfl_args"]["trustworthy"] = self.scenario.trustworthy
-            participant_config["sdfl_args"]["representative"] = self.scenario.representative
-            participant_config["sdfl_args"]["trusted_nodes"] = self.scenario.trusted_nodes
-            participant_config["sdfl_args"]["representated_nodes"] = self.scenario.representated_nodes
+            participant_config["sdfl_args"] = {
+                "elector": self.scenario.elector,
+                "validator": self.scenario.validator,
+                "reputator": self.scenario.reputator,
+                "trust_nodes": node_config.get("sdfl_args", {}).get("trust_nodes", []),
+                "represented_nodes": node_config.get("sdfl_args", {}).get("represented_nodes", []),
+                "representative": node_config.get("sdfl_args", {}).get("representative", ""),
+            }
 
             # To be sure that benign nodes have no attack parameters
             if node_config["role"] == "malicious":

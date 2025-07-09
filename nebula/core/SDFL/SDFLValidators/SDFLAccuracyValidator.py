@@ -39,8 +39,6 @@ class SDFLAccuracyValidator(Validator):
         self.log_dir = os.path.join(self.config.participant["tracking_args"]["log_dir"], self.experiment_name)
         self._lock = asyncio.Lock()
 
-        self.represented = config.participant["sdfl_args"]["represented_nodes"]
-        self.representative = config.participant["sdfl_args"]["representative"]
         self.valid = None
         self.valid_event = asyncio.Event()
         self.received_votes = []
@@ -48,20 +46,9 @@ class SDFLAccuracyValidator(Validator):
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
 
-        trust = ["192.168.51.2:45001", "192.168.51.4:45003"]
-        reper = f"{self.ip}:{self.port}"
-        rep = None
-        if config.participant["network_args"]["port"] == 45002:
-            reper = "192.168.51.2:45001"
-        elif config.participant["network_args"]["port"] == 45004:
-            reper = "192.168.51.4:45003"
-        if config.participant["network_args"]["port"] == 45001:
-            rep = ["192.168.51.2:45001", "192.168.51.3:45002"]
-        elif config.participant["network_args"]["port"] == 45003:
-            rep = ["192.168.51.4:45003", "192.168.51.5:45004"]
-        self.trust_nodes = trust  # config.participant["sdfl_args"]["trusted_nodes"]
-        self.represented = rep
-        self.representative = reper
+        self.trust_nodes = config.participant["sdfl_args"]["trust_nodes"]
+        self.represented = config.participant["sdfl_args"]["represented_nodes"]
+        self.representative = config.participant["sdfl_args"]["representative"]
 
     @property
     def addr(self):

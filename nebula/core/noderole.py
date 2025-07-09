@@ -479,7 +479,7 @@ def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBeha
     from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
 
     if config.participant["scenario_args"]["federation"] == "SDFL":
-        if not config.participant["sdfl_args"]["trustworthy"]:
+        if not config.participant["network_args"]["addr"] in config.participant["sdfl_args"]["trust_nodes"]:
             return SDFLNodeBehavior(
                 engine=engine,
                 config=config,
@@ -489,8 +489,8 @@ def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBeha
             e = create_elector(config)
             r = create_reputator(config)
             tb = TrustBehavior(
-                represented_nodes=config.participant["sdfl_args"]["representated_nodes"],
-                trusted_nodes=config.participant["sdfl_args"]["trusted_nodes"],
+                represented_nodes=config.participant["sdfl_args"]["represented_nodes"],
+                trusted_nodes=config.participant["sdfl_args"]["trust_nodes"],
                 ip=config.participant["network_args"]["ip"],
                 port=config.participant["network_args"]["port"],
                 elector=e,

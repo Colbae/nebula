@@ -154,9 +154,8 @@
     "elector": "RoundRobinElector",
     "validator": "NoValidator",
     "reputator": "NoReputator",
-    "trustworthy": [],
     "representative": "",
-    "trusted_nodes": [],
-    "representated_nodes": []
+    "represented_nodes": [],
+    "trust_nodes": []
   }
 }
