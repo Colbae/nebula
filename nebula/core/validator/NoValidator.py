@@ -6,7 +6,7 @@ class NoValidator(Validator):
     Implementation to skip validation of proposed model.
     """
 
-    async def validate(self, model, round_num):
+    async def validate(self, model, round_num, election_num):
         """
         Always returns True. Skips validation of proposed model.
         """

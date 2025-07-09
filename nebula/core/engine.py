@@ -760,14 +760,14 @@ class Engine:
         return params
 
     async def validate_model(self, params):
-        valid = await self.validator.validate(params, self.round)
-        agg_num = 1
+        valid = await self.validator.validate(params, self.round, 0)
+        election_num = 1
         while not valid:
             logging.info("❌ Validation failed.")
-            params = await self.rb.redo_aggregation(agg_num)
-            valid = await self.validator.validate(params, self.round)
+            params = await self.rb.redo_aggregation(election_num)
+            valid = await self.validator.validate(params, self.round, election_num)
             await self.set_model_params(params)
-            agg_num += 1
+            election_num += 1
         logging.info("✅ Validation succeeded.")
 
     async def set_model_params(self, params):

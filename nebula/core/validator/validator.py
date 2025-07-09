@@ -18,12 +18,13 @@ class Validator(ABC):
     """
 
     @abstractmethod
-    async def validate(self, model, round_num) -> bool:
+    async def validate(self, model, round_num, election_num) -> bool:
         """
         Validates a proposed model.
         Args:
             model: The model to validate.
             round_num: The current round number.
+            election_num: The current election number.
         Returns: True if the proposed model meets the required standards.
         """
         pass

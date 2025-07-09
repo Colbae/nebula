@@ -39,7 +39,7 @@ class SDFLAccuracyValidator(Validator):
         self.log_dir = os.path.join(self.config.participant["tracking_args"]["log_dir"], self.experiment_name)
         self._lock = asyncio.Lock()
 
-        self.represented = config.participant["sdfl_args"]["representated_nodes"]
+        self.represented = config.participant["sdfl_args"]["represented_nodes"]
         self.representative = config.participant["sdfl_args"]["representative"]
         self.valid = None
         self.valid_event = asyncio.Event()
@@ -192,7 +192,7 @@ class SDFLAccuracyValidator(Validator):
         self.valid_event.clear()
         return
 
-    async def _await_voting(self):
+    async def _await_voting(self, election_num):
         await self.received_votes_event.wait()
 
         async with self._lock:
@@ -200,17 +200,22 @@ class SDFLAccuracyValidator(Validator):
             self.received_votes = []
             self.received_votes_event.clear()
 
+        # First expect 50% accepts, reduce requirement by 10% each time it fails
+        # After 5 fails percentage will be 0.0% and it will always accept
+        initial_accept_percentage = 0.5
+        current_accept_percentage = initial_accept_percentage - 0.1 * election_num
+
         accepts = 0
-        rejects = 0
+        total = 0
         for tested, valid in votes_to_process:
             if not tested:
                 continue
             accepts += 1 if valid else 0
-            rejects += 0 if valid else 1
+            total += 1
 
+        accept_percentage = accepts / total
         async with self._lock:
-            self.received_votes = []
-            self.valid = accepts >= rejects
+            self.valid = accept_percentage >= current_accept_percentage
 
     async def _send_decision(self):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
@@ -261,10 +266,10 @@ class SDFLAccuracyValidator(Validator):
                     self.received_votes_event.set()
             await self._send_vote(vote)
 
-    async def validate(self, params, round_num):
+    async def validate(self, params, round_num, election_num):
         if self.addr in self.trust_nodes:
             await self._vote(params, round_num)
-            await self._await_voting()
+            await self._await_voting(election_num)
             await self._send_decision()
         else:
             await self._await_decision()
