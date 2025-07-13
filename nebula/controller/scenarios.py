@@ -257,10 +257,7 @@ class Scenario:
         trust = []
         untrust = []
 
-        logging.info(f"nodes type: {type(nodes)}")
-
         for node in nodes_index:
-            logging.info(f"nodes type: {type(nodes[node])}")
             if (not nodes[node].get("malicious", False)) and cur_trust < trustnode_amount:
                 trust.append(node)
                 cur_trust += 1

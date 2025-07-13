@@ -50,9 +50,10 @@ class Elector(ABC):
 def create_elector(config: Config, trusted=None):
     from nebula.core.SDFL.Electors.RoundRobinElector import RoundRobinElector
 
-    e_type = config.participant["sdfl_args"]["elector"]
+    e_type: str = config.participant["sdfl_args"]["elector"]
+    e_type = e_type.lower()
     match e_type:
-        case "RoundRobinElector":
+        case "roundrobinelector":
             return RoundRobinElector(config, trusted)
     raise InvalidElectorError(e_type)
 

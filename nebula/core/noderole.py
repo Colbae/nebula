@@ -39,6 +39,7 @@ class Role(Enum):
     IDLE = "idle"
     SERVER = "server"
     MALICIOUS = "malicious"
+    SDFL_NODE = "sdfl_node"
 
 
 def factory_node_role(role: str) -> Role:
@@ -56,6 +57,8 @@ def factory_node_role(role: str) -> Role:
         return Role.SERVER
     elif role == "malicious":
         return Role.MALICIOUS
+    elif role == "sdfl_node":
+        return Role.SDFL_NODE
     else:
         return ""
 
@@ -137,6 +140,9 @@ class RoleBehavior(ABC):
     async def redo_aggregation(self, election_num):
         pass
 
+    async def subscribe_to_events(self):
+        pass
+
     async def set_next_role(self, role: Role, source_to_notificate=None):
         """
         Schedules a role change and optionally stores the source to notify upon completion.
@@ -216,6 +222,12 @@ class MaliciousRoleBehavior(RoleBehavior):
         if effective:
             return self._fake_role_behavior.get_role_name()
         return f"{self._role.value} as {self._fake_role_behavior.get_role_name()}"
+
+    async def redo_aggregation(self, election_num):
+        return await self._fake_role_behavior.redo_aggregation(election_num)
+
+    async def subscribe_to_events(self):
+        return await self._fake_role_behavior.subscribe_to_events()
 
     async def extended_learning_cycle(self):
         try:
@@ -478,7 +490,7 @@ class roleBehaviorException(Exception):
 def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBehavior | None:
     from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
 
-    if config.participant["scenario_args"]["federation"] == "SDFL":
+    if config.participant["scenario_args"]["federation"] == "SDFL" and role != "malicious":
         if not config.participant["network_args"]["addr"] in config.participant["sdfl_args"]["trust_nodes"]:
             return SDFLNodeBehavior(
                 engine=engine,

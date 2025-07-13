@@ -21,7 +21,7 @@ class SDFLNodeBehavior(RoleBehavior):
         super().__init__()
         self._engine = engine
         self._config = config
-        self._role = factory_node_role("trainer_aggregator")
+        self._role = factory_node_role("sdfl_node")
         self._lock = asyncio.Lock()
         self._representative = representative
         self._trust_behavior: TrustBehavior = trust_behavior
