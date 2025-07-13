@@ -605,10 +605,7 @@ class Engine:
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
         await self.validator.subscribe_to_events()
 
-        from nebula.core.SDFL.SDFLNodeBehavior import SDFLNodeBehavior
-
-        if isinstance(self._role_behavior, SDFLNodeBehavior):
-            await self._role_behavior.subscribe_to_events()
+        await self._role_behavior.subscribe_to_events()
 
     async def deploy_components(self):
         """

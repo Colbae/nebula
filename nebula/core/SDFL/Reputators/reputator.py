@@ -49,11 +49,12 @@ def create_reputator(config: Config) -> Reputator:
     from nebula.core.SDFL.Reputators.NoReputator import NoReputator
     from nebula.core.SDFL.Reputators.TimeBasedReputator import TimeBasedReputator
 
-    r_type = config.participant["sdfl_args"]["reputator"]
+    r_type: str = config.participant["sdfl_args"]["reputator"]
+    r_type = r_type.lower()
     match r_type:
-        case "NoReputator":
+        case "noreputator":
             return NoReputator()
-        case "TimeBasedReputator":
+        case "timebasedreputator":
             return TimeBasedReputator()
     raise InvalidReputatorError(r_type)
 

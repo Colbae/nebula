@@ -42,10 +42,11 @@ def create_validator(config: Config, model, datamodule) -> Validator:
     from nebula.core.SDFL.SDFLValidators.SDFLAccuracyValidator import SDFLAccuracyValidator
 
     v_type = config.participant["sdfl_args"]["validator"]
+    v_type = v_type.lower()
     match v_type:
-        case "NoValidator":
+        case "novalidator":
             return NoValidator()
-        case "SDFLAccuracyValidator":
+        case "sdflaccuracyvalidator":
             return SDFLAccuracyValidator(config=config, model=model, datamodule=datamodule)
     return NoValidator()
 

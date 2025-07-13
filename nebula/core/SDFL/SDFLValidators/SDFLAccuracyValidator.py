@@ -74,7 +74,7 @@ class SDFLAccuracyValidator(Validator):
                 self.received_votes_event.set()
 
     async def _update_rep(self, re: NewRepresentativeEvent):
-        r = re.get_event_data()
+        r = await re.get_event_data()
         async with self._lock:
             self.representative = r
 
