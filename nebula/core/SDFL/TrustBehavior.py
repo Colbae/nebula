@@ -18,6 +18,8 @@ class TrustBehavior:
         port,
         elector: Elector,
         reputator: Reputator,
+        round_num=-1,
+        initial_round=-1,
     ):
         self.represented_nodes = set(represented_nodes)
         self.trusted_nodes = set(trusted_nodes)
@@ -27,10 +29,12 @@ class TrustBehavior:
         self.reputator = reputator
         self._lock = asyncio.Lock()
         self.reputations_updated_amount = 0
-        self.round = -1
+        self.round = round_num
         self.trust_info_amount = 0
         self.rep_allocations = {}
         self.new_trustnodes = []
+        self.elections_for_round = set()
+        self.initial_round = initial_round
 
     @property
     def addr(self):
@@ -53,13 +57,22 @@ class TrustBehavior:
         r, e = await ee.get_event_data()
         await self.elector.elect(r, e, self.represented_nodes)
 
+    async def _start_election(self):
+        async with self._lock:
+            if self.round in self.elections_for_round:
+                return
+            self.elections_for_round.add(self.round)
+        em: EventManager = EventManager.get_instance()
+        await em.publish_node_event(ElectionEvent(self.round))
+
     ## REPUTATION CALLBACKS ##
     async def _update_reputation(self, re: ReputationEvent):
-        # self.represented_nodes can be edited from promotions,
-        # create copy to iterate over
-        prev_round = self.round
-        self.round = await re.get_event_data()
+        self.round, prev_round = await re.get_event_data()
         trustworthy = []
+
+        if self.round < self.initial_round:
+            return
+
         for r_node in list(self.represented_nodes):
             if r_node == self.addr:
                 continue
@@ -86,8 +99,7 @@ class TrustBehavior:
         if len(self.trusted_nodes) == self.reputations_updated_amount:
             # Add the new trustnodes
             new_allocation = await self._adjust_represented(self.new_trustnodes)
-            for n in self.new_trustnodes:
-                await self._add_trust_node(n, new_allocation.get(n, []))
+            await self._add_trust_nodes(new_allocation)
 
             # reset updates
             async with self._lock:
@@ -95,9 +107,8 @@ class TrustBehavior:
                 self.new_trustnodes = []
 
             # Start the election process
-            em: EventManager = EventManager.get_instance()
             # initiate election once trust nodes have been properly updated
-            await em.publish_node_event(ElectionEvent(self.round))
+            await self._start_election()
 
     async def _adjust_represented(self, new_reps):
         if len(new_reps) == 0:
@@ -179,23 +190,27 @@ class TrustBehavior:
         await EventManager.get_instance().publish_node_event(RepresantativesUpdateEvent(self.represented_nodes))
         return allocations
 
-    async def _add_trust_node(self, node_addr, rep):
+    async def _add_trust_nodes(self, rep_alloc):
         async with self._lock:
-            self.trusted_nodes.add(node_addr)
+            for n in self.new_trustnodes:
+                self.trusted_nodes.add(n)
 
-        cm: CommunicationsManager = CommunicationsManager.get_instance()
-        m = cm.create_message(
-            "info",
-            "trust_info",
-            trusted=list(self.trusted_nodes),
-            represented=rep,
-        )
-        await cm.send_message(node_addr, m)
+        cur = await self.elector.get_current()
 
-        async with self._lock:
-            self.trusted_nodes.add(node_addr)
+        for n in self.new_trustnodes:
+            cm: CommunicationsManager = CommunicationsManager.get_instance()
+            m = cm.create_message(
+                "info",
+                "trust_info",
+                trusted=list(self.trusted_nodes),
+                represented=rep_alloc.get(n, []),
+                current=cur,
+                round_num=self.round
+            )
+            await cm.send_message(n, m)
+
         em: EventManager = EventManager.get_instance()
-        await em.publish_node_event(TrustNodeAddedEvent(node_addr))
+        await em.publish_node_event(TrustNodeAddedEvent(set(self.trusted_nodes)))
 
     ## MSG CALLBACKS ##
     async def _add_trust_node_callback(self, source, message):
@@ -209,7 +224,7 @@ class TrustBehavior:
         await self._reputation_updated()
 
     ## PROMOTION ##
-    async def update_represented(self, source, message, round_num):
+    async def update_represented(self, source, message):
         async with self._lock:
             self.trust_info_amount += 1
             self.trusted_nodes.update(message.trusted)
@@ -218,17 +233,7 @@ class TrustBehavior:
         # wait until all trustworthy nodes have updated the new node
         # len(self.trusted_nodes) - 1, since trusted_nodes include this node
         if len(self.trusted_nodes) - 1 == self.trust_info_amount:
-            # send msg to other trust nodes to confirm it being ready
-            cm: CommunicationsManager = CommunicationsManager.get_instance()
-            m = cm.create_message("trustworthy", "add", node_addr=[], rep_addr=self.represented_nodes)
-            for t_node in self.trusted_nodes:
-                if t_node == self.addr:
-                    continue
-                await cm.send_message(t_node, m)
-
             await EventManager.get_instance().publish_node_event(
-                PromotionEvent(self.represented_nodes, self.trusted_nodes))
-
+                PromotionEvent(self.represented_nodes, self.trusted_nodes, message.round_num))
             # start election
-            em: EventManager = EventManager.get_instance()
-            await em.publish_node_event(ElectionEvent(round_num))
+            await self._start_election()

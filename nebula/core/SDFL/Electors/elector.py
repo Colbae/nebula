@@ -46,15 +46,19 @@ class Elector(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_current(self):
+        pass
 
-def create_elector(config: Config, trusted=None):
+
+def create_elector(config: Config, trusted=None, current=0):
     from nebula.core.SDFL.Electors.RoundRobinElector import RoundRobinElector
 
     e_type: str = config.participant["sdfl_args"]["elector"]
     e_type = e_type.lower()
     match e_type:
         case "roundrobinelector":
-            return RoundRobinElector(config, trusted)
+            return RoundRobinElector(config, trusted, current)
     raise InvalidElectorError(e_type)
 
 
