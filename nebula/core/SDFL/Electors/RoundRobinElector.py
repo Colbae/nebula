@@ -8,37 +8,61 @@ from nebula.core.network.communications import CommunicationsManager
 
 
 class RoundRobinElector(Elector):
-    def __init__(self, config, trusted=None):
-        trust_nodes = list(trusted) if trusted is not None else list(config.participant["sdfl_args"]["trust_nodes"])
+    def __init__(self, config, trusted=None, current=0):
+        trust_nodes: list[str] = list(trusted) if trusted is not None else list(
+            config.participant["sdfl_args"]["trust_nodes"])
         trust_nodes.sort()
 
         self.trust_nodes = trust_nodes
-        self.rep = None
         self.received_leader = None
-        self.current = 0
+        self.current = current
         self.lock = asyncio.Lock()
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
+        self.current_leader = None
+        self.queue = None
 
     @property
     def addr(self):
         return f"{self.ip}:{self.port}"
 
-    async def elect(self, round_num: int, election_num: int, rep: set[str]):
-        async with self.lock:
-            self.rep = rep
-
-        if self.trust_nodes[self.current] == self.addr:
-            leader = secrets.choice(list(rep))
-            await self._send_choice(leader, round_num, rep, election_num)
-            await publish_election_event(leader, self.addr, round_num, election_num)
-
-        self.current = (self.current + 1) % len(self.trust_nodes)
-
     async def subscribe_to_events(self):
         em: EventManager = EventManager.get_instance()
         await em.subscribe_node_event(LeaderElectedEvent, self._leader_received)
         await em.subscribe_node_event(TrustNodeAddedEvent, self._add_node)
+
+    async def elect(self, round_num: int, election_num: int, rep: set[str]):
+        if self.trust_nodes[self.current] == self.addr:
+            leader = secrets.choice(list(rep))
+            async with self.lock:
+                self.current_leader = (leader, round_num, election_num)
+            await self._send_choice(leader, round_num, rep, election_num)
+            await publish_election_event(leader, self.addr, round_num, election_num)
+        else:
+            await self._await_leader(round_num, election_num, rep)
+
+        self.current = (self.current + 1) % len(self.trust_nodes)
+        async with self.lock:
+            self.current_leader = None
+            self.queue = None
+
+    async def _await_leader(self, round_num, election_num, reps):
+        async with self.lock:
+            if self.current_leader is not None:
+                await self._send_choice(self.current_leader, round_num, reps, election_num, trusted=False)
+                self.current_leader = None
+                return
+            self.queue = asyncio.Queue()
+
+        leader = await self.queue.get()
+        await self._send_choice(leader, round_num, reps, election_num, trusted=False)
+
+    async def _leader_received(self, lee: LeaderElectedEvent):
+        leader, _, _, _ = await lee.get_event_data()
+        async with self.lock:
+            self.current_leader = leader
+            if self.queue is not None:
+                await self.queue.put(leader)
 
     async def _send_choice(self, leader, round_num, rep, election_num, trusted=True):
         cm: CommunicationsManager = CommunicationsManager.get_instance()
@@ -53,15 +77,11 @@ class RoundRobinElector(Elector):
                 continue
             await cm.send_message(n, m)
 
-    async def _leader_received(self, lee: LeaderElectedEvent):
-        leader, source, r, e_num = await lee.get_event_data()
-        if source not in self.trust_nodes:
-            return
-
-        await self._send_choice(leader, r, self.rep, e_num, trusted=False)
-
     async def _add_node(self, te: TrustNodeAddedEvent):
-        node_addr = await te.get_event_data()
+        nodes_addr = await te.get_event_data()
         async with self.lock:
-            self.trust_nodes.append(node_addr)
+            self.trust_nodes = list(nodes_addr)
             self.trust_nodes.sort()
+
+    async def get_current(self):
+        return self.current

@@ -869,7 +869,7 @@ class Engine:
                     await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
                 )
                 em: EventManager = EventManager.get_instance()
-                await em.publish_node_event(ReputationEvent(self.round))
+                await em.publish_node_event(ReputationEvent(self.round, self.round - 1))
 
                 expected_nodes = await self.rb.select_nodes_to_wait()
                 rse = RoundStartEvent(self.round, current_time, expected_nodes)

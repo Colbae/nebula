@@ -76,13 +76,14 @@ class SDFLNodeBehavior(RoleBehavior):
 
     async def _update_representative(self, source, message):
         if source == self._representative and self.trust_behavior is None:
-            self._representative = message.node_addr
-            await EventManager.get_instance().publish_node_event(NewRepresentativeEvent(self._representative))
+            async with self._lock:
+                self._representative = message.node_addr
+                await EventManager.get_instance().publish_node_event(NewRepresentativeEvent(self._representative))
 
     async def _promote_node(self, source, message):
         if not self._trust_behavior:
             r = create_reputator(self._config)
-            e = create_elector(self._config, message.trusted)
+            e = create_elector(self._config, message.trusted, message.current)
             trusted = [self.addr]
             rep = [self.addr]
             trusted.extend(message.trusted)
@@ -95,17 +96,15 @@ class SDFLNodeBehavior(RoleBehavior):
                 port=self._engine.port,
                 elector=e,
                 reputator=r,
+                round_num=message.round_num,
+                initial_round=message.round_num,
             )
             self._representative = None
             await self._trust_behavior.subscribe_to_events()
-        await self._trust_behavior.update_represented(source, message, self._engine.round)
+        await self._trust_behavior.update_represented(source, message)
 
     async def _update_leader(self, lee: LeaderElectedEvent):
         leader, source, r_num, e_num = await lee.get_event_data()
-        if source != self._representative and (
-            self.trust_behavior is not None and source not in self._trust_behavior.trusted_nodes):
-            return
-
         key = (r_num, e_num)
         async with self._lock:
             self._leader[key] = leader

@@ -28,7 +28,6 @@ class SDFLAccuracyValidator(Validator):
         self._logger = None
         self.datamodule = datamodule
         self.model = model
-        self.round = -1
         self.config = config
         self._trainer = None
         self.accuracy = {}
@@ -41,14 +40,16 @@ class SDFLAccuracyValidator(Validator):
 
         self.valid = None
         self.valid_event = asyncio.Event()
-        self.received_votes = []
+        self.received_votes = {}
         self.received_votes_event = asyncio.Event()
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
 
-        self.trust_nodes = config.participant["sdfl_args"]["trust_nodes"]
+        self.trust_nodes: set[str] = set(config.participant["sdfl_args"]["trust_nodes"])
         self.represented = config.participant["sdfl_args"]["represented_nodes"]
         self.representative = config.participant["sdfl_args"]["representative"]
+
+        self.initial_round = -1
 
     @property
     def addr(self):
@@ -64,12 +65,10 @@ class SDFLAccuracyValidator(Validator):
         await em.subscribe(("validation", "info"), self._validation_info)
 
     async def _vote_update(self, source, message):
-        if source not in self.trust_nodes:
-            return
         tested = message.tested
         valid = message.valid
         async with self._lock:
-            self.received_votes.append((tested, valid))
+            self.received_votes[source] = (tested, valid)
             if len(self.received_votes) == len(self.trust_nodes):
                 self.received_votes_event.set()
 
@@ -87,9 +86,11 @@ class SDFLAccuracyValidator(Validator):
             self.valid_event.set()
 
     async def _add_node(self, te: TrustNodeAddedEvent):
-        node = await te.get_event_data()
+        nodes = await te.get_event_data()
         async with self._lock:
-            self.trust_nodes.append(node)
+            if self.addr in self.received_votes:
+                await self._send_votes(self.received_votes[self.addr], nodes)
+            self.trust_nodes.update(nodes)
 
     async def _update_reps(self, te: RepresantativesUpdateEvent):
         reps = await te.get_event_data()
@@ -97,10 +98,11 @@ class SDFLAccuracyValidator(Validator):
             self.represented = reps
 
     async def _activate_validator(self, te: PromotionEvent):
-        reps, trusted = await te.get_event_data()
+        reps, trusted, round_num = await te.get_event_data()
         async with self._lock:
             self.represented = reps
             self.trust_nodes = trusted
+            self.initial_round = round_num
 
     def create_logger(self):
         if self.config.participant["tracking_args"]["local_tracking"] == "csv":
@@ -161,7 +163,7 @@ class SDFLAccuracyValidator(Validator):
 
     def _test_sync(self):
         try:
-            self._trainer.test(self.model, self.datamodule, verbose=True)
+            self._trainer.test(self.model, self.datamodule, verbose=False)
             metrics = self._trainer.callback_metrics
             loss = metrics.get('val_loss/dataloader_idx_0', None).item()
             accuracy = metrics.get('val_accuracy/dataloader_idx_0', None).item()
@@ -184,7 +186,7 @@ class SDFLAccuracyValidator(Validator):
 
         async with self._lock:
             votes_to_process = self.received_votes
-            self.received_votes = []
+            self.received_votes = {}
             self.received_votes_event.clear()
 
         # First expect 50% accepts, reduce requirement by 10% each time it fails
@@ -194,7 +196,7 @@ class SDFLAccuracyValidator(Validator):
 
         accepts = 0
         total = 0
-        for tested, valid in votes_to_process:
+        for tested, valid in votes_to_process.values():
             if not tested:
                 continue
             accepts += 1 if valid else 0
@@ -212,12 +214,15 @@ class SDFLAccuracyValidator(Validator):
                 continue
             await cm.send_message(node, m)
 
-    async def _send_vote(self, vote):
+    async def _send_votes_to_all(self, vote):
+        await self._send_votes(vote, self.trust_nodes)
+
+    async def _send_votes(self, vote, nodes):
         tested = vote[0]
         valid = vote[1]
         cm: CommunicationsManager = CommunicationsManager.get_instance()
         m = cm.create_message(message_type="validation", action="vote", tested=tested, valid=valid)
-        for node in self.trust_nodes:
+        for node in nodes:
             if node == self.addr:
                 continue
             await cm.send_message(node, m)
@@ -230,31 +235,31 @@ class SDFLAccuracyValidator(Validator):
             _, accuracy = await asyncio.to_thread(self._test_sync)
             logging.info(f"{'=' * 10} [Testing] Finished (check training logs for progress) {'=' * 10}")
             prev = round_num - 1
-            async with self._lock:
+            async with (self._lock):
                 if self.accuracy.get(prev, 0) - self.margin_of_error <= accuracy:
                     vote = (True, True)
-                    self.received_votes.append(vote)
+                    self.received_votes[self.addr] = vote
                 else:
                     vote = (True, False)
-                    self.received_votes.append(vote)
+                    self.received_votes[self.addr] = vote
 
                 if len(self.received_votes) == len(self.trust_nodes):
                     self.received_votes_event.set()
                 self.accuracy[round_num] = accuracy
-            await self._send_vote(vote)
+            await self._send_votes_to_all(vote)
 
         except Exception as e:
             logging_training.error(f"Error testing model: {e}")
             logging_training.error(traceback.format_exc())
             async with self._lock:
                 vote = (False, False)
-                self.received_votes.append(vote)
+                self.received_votes[self.addr] = vote
                 if len(self.received_votes) == len(self.trust_nodes):
                     self.received_votes_event.set()
-            await self._send_vote(vote)
+            await self._send_votes_to_all(vote)
 
     async def validate(self, params, round_num, election_num):
-        if self.addr in self.trust_nodes:
+        if self.addr in self.trust_nodes and round_num >= self.initial_round:
             await self._vote(params, round_num)
             await self._await_voting(election_num)
             await self._send_decision()

@@ -415,14 +415,15 @@ class LeaderElectedEvent(NodeEvent):
 class ReputationEvent(NodeEvent):
     """Event to update reputation."""
 
-    def __init__(self, round_num):
+    def __init__(self, round_num, prev_round):
         self._round_num = round_num
+        self.prev_round = prev_round
 
     def __str__(self):
         return f"Updating reputation for round {self._round_num}"
 
     async def get_event_data(self):
-        return self._round_num
+        return self._round_num, self.prev_round
 
     async def is_concurrent(self) -> bool:
         return False
@@ -446,31 +447,17 @@ class ElectionEvent(NodeEvent):
 
 
 class TrustNodeAddedEvent(NodeEvent):
-    def __init__(self, node_addr):
+    def __init__(self, node_addr: set[str]) -> None:
         self._node_addr = node_addr
 
     def __str__(self):
         return f"Node {self._node_addr} is trusted"
 
-    async def get_event_data(self) -> str:
+    async def get_event_data(self) -> set[str]:
         return self._node_addr
 
     async def is_concurrent(self) -> bool:
-        return True
-
-
-class ValidationFailedEvent(NodeEvent):
-    def __init__(self, round_num):
-        self._round = round_num
-
-    def __str__(self):
-        return f"Validation failed for round {self._round}"
-
-    async def get_event_data(self):
-        return self._round
-
-    async def is_concurrent(self):
-        return True
+        return False
 
 
 class RepresantativesUpdateEvent(NodeEvent):
@@ -488,15 +475,16 @@ class RepresantativesUpdateEvent(NodeEvent):
 
 
 class PromotionEvent(NodeEvent):
-    def __init__(self, reps, trust):
+    def __init__(self, reps, trust, round_num):
         self._reps = reps
         self._trust = trust
+        self._round = round_num
 
     def __str__(self):
         return f"Node promoted"
 
     async def get_event_data(self):
-        return self._reps, self._trust
+        return self._reps, self._trust, self._round
 
     async def is_concurrent(self):
         return False
