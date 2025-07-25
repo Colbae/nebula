@@ -128,7 +128,7 @@ class Lightning:
         self.model = model
         self.datamodule = datamodule
         self.config = config
-        self._trainer = None
+        self._trainer: Trainer = None
         self.epochs = 1
         self.round = 0
         self.experiment_name = self.config.participant["scenario_args"]["name"]

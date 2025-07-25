@@ -1,4 +1,5 @@
 import asyncio
+import copy
 
 from nebula.config.config import Config
 from nebula.core.SDFL.Electors.elector import create_elector, publish_election_event
@@ -25,6 +26,7 @@ class SDFLNodeBehavior(RoleBehavior):
         self._lock = asyncio.Lock()
         self._representative = representative
         self._trust_behavior: TrustBehavior = trust_behavior
+        self.old_params = None
 
         # Dictionary from (round_num, election_num) => asyncio.Queue to wait for the leader update and retrieve it
         self._leader_queues: dict[tuple[int, int], asyncio.Queue] = {}
@@ -121,6 +123,8 @@ class SDFLNodeBehavior(RoleBehavior):
         await em.publish_node_event(ElectionEvent(self._engine.round, aggregation_num))
         nodes = await self.select_nodes_to_wait(aggregation_num)
 
+        await self._engine.set_model_params(self.old_params)
+
         await self._engine.aggregator.update_federation_nodes(nodes)
         return await self.after_learning_cycle(aggregation_num)
 
@@ -142,9 +146,13 @@ class SDFLNodeBehavior(RoleBehavior):
         await self._engine.validate_model(params)
 
     async def after_learning_cycle(self, election_num=0):
-        # If this node is leader act as aggregator
 
+        # If this node is leader act as aggregator
         leader = await self._get_leader(self._engine.round, election_num)
+
+        # keep old parameters for potential redo of aggregation
+        async with (self._lock):
+            self.old_params = copy.deepcopy(self._engine.trainer.get_model_parameters())
 
         if leader == self.addr:
             self_update_event = UpdateReceivedEvent(

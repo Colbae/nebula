@@ -165,6 +165,8 @@ class SDFLAccuracyValidator(Validator):
         try:
             self._trainer.test(self.model, self.datamodule, verbose=False)
             metrics = self._trainer.callback_metrics
+
+            # dataloader_idx_0 is the dataloader using the local dataset
             loss = metrics.get('val_loss/dataloader_idx_0', None).item()
             accuracy = metrics.get('val_accuracy/dataloader_idx_0', None).item()
             return loss, accuracy
@@ -189,9 +191,9 @@ class SDFLAccuracyValidator(Validator):
             self.received_votes = {}
             self.received_votes_event.clear()
 
-        # First expect 50% accepts, reduce requirement by 10% each time it fails
+        # First expect 70% accepts, reduce requirement by 10% each time it fails
         # After 5 fails percentage will be 0.0% and it will always accept
-        initial_accept_percentage = 0.5
+        initial_accept_percentage = 0.7
         current_accept_percentage = initial_accept_percentage - 0.1 * election_num
 
         accepts = 0
@@ -202,7 +204,10 @@ class SDFLAccuracyValidator(Validator):
             accepts += 1 if valid else 0
             total += 1
 
-        accept_percentage = accepts / total
+        if total > 0:
+            accept_percentage = accepts / total
+        else:
+            accept_percentage = 1
         async with self._lock:
             self.valid = accept_percentage >= current_accept_percentage
 
@@ -236,7 +241,11 @@ class SDFLAccuracyValidator(Validator):
             logging.info(f"{'=' * 10} [Testing] Finished (check training logs for progress) {'=' * 10}")
             prev = round_num - 1
             async with (self._lock):
-                if self.accuracy.get(prev, 0) - self.margin_of_error <= accuracy:
+                prev_acc = self.accuracy.get(prev, -1)
+                if prev_acc == -1:
+                    vote = (False, False)
+                    self.received_votes[self.addr] = vote
+                elif prev_acc - self.margin_of_error <= accuracy:
                     vote = (True, True)
                     self.received_votes[self.addr] = vote
                 else:
