@@ -1,8 +1,8 @@
 // Scenario Management Module
-const ScenarioManager = (function() {
+const ScenarioManager = (function () {
     let scenariosList = [];
     let actual_scenario = 0;
-    let physical_ips     = [];
+    let physical_ips = [];
 
     // Initialize scenarios from session storage
     function initializeScenarios() {
@@ -131,7 +131,11 @@ const ScenarioManager = (function() {
             schema_additional_participants: document.getElementById("schemaAdditionalParticipantsSelect").value || "random",
             accelerator: "cpu",
             gpu_id: [],
-            physical_ips: physical_ips
+            physical_ips: physical_ips,
+            trustworthy_amount: parseInt(document.getElementById("trustworthyAmount").value),
+            validator: document.getElementById("validationSelect").value,
+            elector: document.getElementById("electionSelect").value,
+            reputator: document.getElementById("reputationSelect").value,
         };
     }
 
@@ -353,16 +357,16 @@ const ScenarioManager = (function() {
     function setPhysicalIPs(ipList = []) {
         physical_ips = [...ipList];
     }
- 
+
     function setActualScenario(index) {
         actual_scenario = index;
         if (scenariosList[index]) {
             // Clear the current graph
             window.TopologyManager.clearGraph();
-            
+
             // Load new scenario data
             loadScenarioData(scenariosList[index]);
-            
+
             // If physical deployment, set physical IPs
             if (scenariosList[index].deployment === 'physical' && scenariosList[index].physical_ips) {
                 window.TopologyManager.setPhysicalIPs(scenariosList[index].physical_ips);

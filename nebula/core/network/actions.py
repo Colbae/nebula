@@ -84,6 +84,27 @@ class ReputationAction(Enum):
     SHARE = nebula_pb2.ReputationMessage.Action.SHARE
 
 
+class TrustworthyAction(Enum):
+    ADD = nebula_pb2.TrustworthyMessage.Action.ADD
+
+
+class RepresentativeAction(Enum):
+    UPDATE = nebula_pb2.RepresentativeMessage.Action.UPDATE
+
+
+class InfoAction(Enum):
+    TRUST_INFO = nebula_pb2.InfoMessage.Action.TRUST_INFO
+
+
+class LeaderAction(Enum):
+    ELECT = nebula_pb2.LeaderMessage.Action.ELECT
+
+
+class ValidationAction(Enum):
+    VOTE = nebula_pb2.ValidationMessage.Action.VOTE
+    INFO = nebula_pb2.ValidationMessage.Action.INFO
+
+
 # Mapping between message type strings and their corresponding Enum classes
 ACTION_CLASSES = {
     "connection": ConnectionAction,
@@ -94,6 +115,11 @@ ACTION_CLASSES = {
     "offer": OfferAction,
     "link": LinkAction,
     "reputation": ReputationAction,
+    "trustworthy": TrustworthyAction,
+    "representative": RepresentativeAction,
+    "info": InfoAction,
+    "leader": LeaderAction,
+    "validation": ValidationAction,
 }
 
 

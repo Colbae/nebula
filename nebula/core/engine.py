@@ -1,13 +1,11 @@
 import asyncio
 import logging
 import os
-import random
 import socket
 import time
 
 import docker
 
-from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.addons.reputation.reputation import Reputation
@@ -16,18 +14,19 @@ from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import (
     AggregationEvent,
-    ExperimentFinishEvent,
     RoundEndEvent,
     RoundStartEvent,
     UpdateNeighborEvent,
     UpdateReceivedEvent,
     ExperimentFinishEvent,
-    ModelPropagationEvent,
+    ModelPropagationEvent, ReputationEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
-from nebula.core.role import Role, factory_node_role
+from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
+from nebula.core.role import Role
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
 from nebula.core.utils.locker import Locker
+from nebula.core.validator.validator import create_validator
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -94,7 +93,7 @@ class Engine:
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
-        
+
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
@@ -159,6 +158,7 @@ class Engine:
         event_manager = EventManager.get_instance(verbose=False)
         self._addon_manager = AddondManager(self, self.config)
 
+        self.validator = create_validator(config=self.config, model=model, datamodule=datamodule)
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
@@ -187,7 +187,7 @@ class Engine:
     def trainer(self):
         """Trainer"""
         return self._trainer
-    
+
     @property
     def rb(self):
         """Role Behavior"""
@@ -317,7 +317,7 @@ class Engine:
 
     async def _control_leadership_transfer_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer message from {source}")
-        
+
         if await self._round_in_process_lock.locked_async():
             logging.info("Learning cycle is executing, role behavior will be modified next round")
             await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
@@ -354,7 +354,6 @@ class Engine:
             except TimeoutError:
                 logging.info("Learning cycle is locked, role behavior will be modified next round")
                 await self.rb.set_next_role(Role.TRAINER)
-        
 
     async def _connection_connect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received connection message from {source}")
@@ -400,7 +399,8 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+            logging.info(
+                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
 
             current_node = self.addr
             nei = message.node_id
@@ -603,6 +603,9 @@ class Engine:
         initial_neighbors = self.config.participant["network_args"]["neighbors"].split()
         await self.cm.start_communications(initial_neighbors)
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
+        await self.validator.subscribe_to_events()
+
+        await self._role_behavior.subscribe_to_events()
 
     async def deploy_components(self):
         """
@@ -710,10 +713,11 @@ class Engine:
                 await self.get_federation_ready_lock().acquire_async()
                 if self.config.participant["device_args"]["start"]:
                     logging.info("Propagate initial model updates.")
-                    
-                    mpe = ModelPropagationEvent(await self.cm.get_addrs_current_connections(only_direct=True, myself=False), "initialization")
+
+                    mpe = ModelPropagationEvent(
+                        await self.cm.get_addrs_current_connections(only_direct=True, myself=False), "initialization")
                     await EventManager.get_instance().publish_node_event(mpe)
-                    
+
                     await self.get_federation_ready_lock().release_async()
 
                 self.trainer.set_epochs(epochs)
@@ -741,8 +745,29 @@ class Engine:
         This method is called after local training and before proceeding to the next round,
         ensuring the model is synchronized with the federation's latest aggregated state.
         """
+        params = await self.aggregate_models()
+        await self.set_model_params(params)
+        new_params = await self.validate_model(params)
+        if new_params != params:
+            await self.set_model_params(params)
+
+    async def aggregate_models(self):
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
+        return params
+
+    async def validate_model(self, params):
+        valid = await self.validator.validate(params, self.round, 0)
+        election_num = 1
+        while not valid:
+            logging.info("❌ Validation failed.")
+            params = await self.rb.redo_aggregation(election_num)
+            valid = await self.validator.validate(params, self.round, election_num)
+            await self.set_model_params(params)
+            election_num += 1
+        logging.info("✅ Validation succeeded.")
+
+    async def set_model_params(self, params):
         if params is not None:
             logging.info(
                 f"_waiting_model_updates | Aggregation done for round {self.round}, including parameters in local model."
@@ -764,7 +789,7 @@ class Engine:
             return False
         else:
             return current_round >= self.total_rounds
-        
+
     async def resolve_missing_updates(self):
         """
         Delegates the resolution strategy for missing updates to the current role behavior.
@@ -778,7 +803,7 @@ class Engine:
         """
         logging.info(f"Using Role behavior: {self.rb.get_role_name()} conflict resolve strategy")
         return await self.rb.resolve_missing_updates()
-    
+
     async def update_self_role(self):
         """
         Checks whether a role update is required and performs the transition if necessary.
@@ -806,7 +831,7 @@ class Engine:
                 logging.info(f"Sending role modification ACK to transferer: {source_to_notificate}")
                 message = self.cm.create_message("control", "leadership_transfer_ack")
                 asyncio.create_task(self.cm.send_message(source_to_notificate, message))
-             
+
     async def _learning_cycle(self):
         """
         Main asynchronous loop for executing the Federated Learning process across multiple rounds.
@@ -837,24 +862,27 @@ class Engine:
                     indent=2,
                     title="Round information",
                 )
-                
                 await self.update_self_role()
-                
+
                 logging.info(f"Federation nodes: {self.federation_nodes}")
                 await self.update_federation_nodes(
                     await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
                 )
+                em: EventManager = EventManager.get_instance()
+                await em.publish_node_event(ReputationEvent(self.round, self.round - 1))
+
                 expected_nodes = await self.rb.select_nodes_to_wait()
                 rse = RoundStartEvent(self.round, current_time, expected_nodes)
-                await EventManager.get_instance().publish_node_event(rse)
+                await em.publish_node_event(rse)
                 self.trainer.on_round_start()
                 logging.info(f"Expected nodes: {expected_nodes}")
                 direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
                 undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
-                
-                logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
+
+                logging.info(
+                    f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
                 logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
-                
+
                 await self.aggregator.update_federation_nodes(expected_nodes)
                 async with self._role_behavior_performance_lock:
                     await self.rb.extended_learning_cycle()
@@ -882,13 +910,13 @@ class Engine:
         self.trainer.on_learning_cycle_end()
 
         await self.trainer.test()
-        
+
         # Shutdown protocol
         await self._shutdown_protocol()
-            
+
     async def _shutdown_protocol(self):
         logging.info("Starting graceful shutdown process...")
-        
+
         # 1.- Publish Experiment Finish Event to the last update on modules
         logging.info("Publishing Experiment Finish Event...")
         efe = ExperimentFinishEvent()

@@ -17,10 +17,10 @@ from lightning.pytorch.loggers import CSVLogger
 from torch.nn import functional as F
 
 from nebula.config.config import TRAINING_LOGGER
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import TestMetricsEvent
 from nebula.core.utils.deterministic import enable_deterministic
 from nebula.core.utils.nebulalogger_tensorboard import NebulaTensorBoardLogger
-from nebula.core.nebulaevents import TestMetricsEvent
-from nebula.core.eventmanager import EventManager
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
@@ -128,7 +128,7 @@ class Lightning:
         self.model = model
         self.datamodule = datamodule
         self.config = config
-        self._trainer = None
+        self._trainer: Trainer = None
         self.epochs = 1
         self.round = 0
         self.experiment_name = self.config.participant["scenario_args"]["name"]

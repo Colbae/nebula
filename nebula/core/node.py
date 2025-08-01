@@ -3,8 +3,6 @@ import os
 import random
 import sys
 import warnings
-import socket
-import docker
 
 import torch
 

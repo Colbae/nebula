@@ -5,7 +5,7 @@ class AddonEvent(ABC):
     """
     Abstract base class for all addon-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -21,7 +21,7 @@ class NodeEvent(ABC):
     """
     Abstract base class for all node-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -52,7 +52,7 @@ class MessageEvent:
         source (str): Address or identifier of the message sender.
         message (Any): The actual message payload.
     """
-    
+
     def __init__(self, message_type, source, message):
         """
         Initializes a MessageEvent instance.
@@ -74,15 +74,15 @@ class MessageEvent:
 
 
 class RoundStartEvent(NodeEvent):
-    def __init__(self, round, start_time, expected_nodes):
+    def __init__(self, round_num, start_time, expected_nodes):
         """Event triggered when round is going to start.
 
         Args:
-            round (int): Round number.
+            round_num (int): Round number.
             start_time (time): Current time when round is going to start.
         """
         self._round_start_time = start_time
-        self._round = round
+        self._round = round_num
         self._expected_nodes = expected_nodes
 
     def __str__(self):
@@ -103,15 +103,15 @@ class RoundStartEvent(NodeEvent):
 
 
 class RoundEndEvent(NodeEvent):
-    def __init__(self, round, end_time):
+    def __init__(self, round_num, end_time):
         """Event triggered when round is going to start.
 
         Args:
-            round (int): Round number.
+            round_num (int): Round number.
             end_time (time): Current time when round has ended.
         """
         self._round_end_time = end_time
-        self._round = round
+        self._round = round_num
 
     def __str__(self):
         return "Round ending"
@@ -264,7 +264,8 @@ class NodeFoundEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
+
 class ModelPropagationEvent(NodeEvent):
     def __init__(self, eligible_neighbors, strategy):
         """Event triggered when model propagation is ready.
@@ -275,7 +276,7 @@ class ModelPropagationEvent(NodeEvent):
         """
         self.eligible_neighbors = eligible_neighbors
         self._strategy = strategy
-        
+
     def __str__(self):
         return f"Model propagation event, strategy: {self._strategy}"
 
@@ -291,12 +292,11 @@ class ModelPropagationEvent(NodeEvent):
         return (self.eligible_neighbors, self._strategy)
 
     async def is_concurrent(self) -> bool:
-        return False    
-            
+        return False
 
 
 class UpdateReceivedEvent(NodeEvent):
-    def __init__(self, decoded_model, weight, source, round, local=False):
+    def __init__(self, decoded_model, weight, source, round_num, local=False):
         """
         Initializes an UpdateReceivedEvent.
 
@@ -304,11 +304,11 @@ class UpdateReceivedEvent(NodeEvent):
             decoded_model (Any): The received model update.
             weight (float): The weight associated with the received update.
             source (str): The identifier or address of the node that sent the update.
-            round (int): The round number in which the update was received.
+            round_num (int): The round number in which the update was received.
             local (bool): Local update
         """
         self._source = source
-        self._round = round
+        self._round = round_num
         self._model = decoded_model
         self._weight = weight
         self._local = local
@@ -362,7 +362,8 @@ class BeaconRecievedEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
+
 class DuplicatedMessageEvent(NodeEvent):
     """
     Event triggered when a message is received that has already been processed.
@@ -370,7 +371,7 @@ class DuplicatedMessageEvent(NodeEvent):
     Attributes:
         source (str): The address of the node that sent the duplicated message.
     """
-    
+
     def __init__(self, source: str, message_type: str):
         self.source = source
 
@@ -382,6 +383,140 @@ class DuplicatedMessageEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
+
+
+class LeaderElectedEvent(NodeEvent):
+    """Event triggered when a leader election is completed."""
+
+    def __init__(self, leader, source, round_num, election_num):
+        """
+        Initializes an LeaderElectedEvent.
+        Args:
+            leader (str): Node elected as leader.
+            source (str): The address of the node that sent the leader election.
+            round_num (int): Round number.
+            election_num (int): Election number.
+        """
+        self._leader = leader
+        self._source = source
+        self._round = round_num
+        self._election_num = election_num
+
+    def __str__(self):
+        return f"Node {self._leader} elected as leader for round {self._round}"
+
+    async def get_event_data(self) -> tuple[str, str, int, int]:
+        return self._leader, self._source, self._round, self._election_num
+
+    async def is_concurrent(self) -> bool:
+        return False
+
+
+class ReputationEvent(NodeEvent):
+    """Event to update reputation."""
+
+    def __init__(self, round_num, prev_round):
+        self._round_num = round_num
+        self.prev_round = prev_round
+
+    def __str__(self):
+        return f"Updating reputation for round {self._round_num}"
+
+    async def get_event_data(self):
+        return self._round_num, self.prev_round
+
+    async def is_concurrent(self) -> bool:
+        return False
+
+
+class ElectionEvent(NodeEvent):
+    """Event to start elections."""
+
+    def __init__(self, round_num, election_num=0):
+        self._round = round_num
+        self._election_num = election_num
+
+    def __str__(self):
+        return f"Election for round {self._round}"
+
+    async def get_event_data(self):
+        return self._round, self._election_num
+
+    async def is_concurrent(self):
+        return True
+
+
+class TrustNodeAddedEvent(NodeEvent):
+    def __init__(self, node_addr: set[str]) -> None:
+        self._node_addr = node_addr
+
+    def __str__(self):
+        return f"Node {self._node_addr} is trusted"
+
+    async def get_event_data(self) -> set[str]:
+        return self._node_addr
+
+    async def is_concurrent(self) -> bool:
+        return False
+
+
+class RepresantativesUpdateEvent(NodeEvent):
+    def __init__(self, reps):
+        self._reps = reps
+
+    def __str__(self):
+        return f"Represantative updated to {self._reps}"
+
+    async def get_event_data(self):
+        return self._reps
+
+    async def is_concurrent(self):
+        return False
+
+
+class PromotionEvent(NodeEvent):
+    def __init__(self, reps, trust, round_num):
+        self._reps = reps
+        self._trust = trust
+        self._round = round_num
+
+    def __str__(self):
+        return f"Node promoted"
+
+    async def get_event_data(self):
+        return self._reps, self._trust, self._round
+
+    async def is_concurrent(self):
+        return False
+
+
+class NewRepresentativeEvent(NodeEvent):
+    def __init__(self, rep):
+        self._rep = rep
+
+    def __str__(self):
+        return f"New representative {self._rep}"
+
+    async def get_event_data(self):
+        return self._rep
+
+    async def is_concurrent(self):
+        return False
+
+
+class ValidationEvent(NodeEvent):
+    def __init__(self, model):
+        self._model = model
+
+    def __str__(self):
+        return "Validation model update"
+
+    def get_event_data(self):
+        return self._model
+
+    async def is_concurrent(self) -> bool:
+        return False
+
 
 """                                                     ##############################
                                                         #         ADDON EVENTS       #
@@ -396,7 +531,7 @@ class GPSEvent(AddonEvent):
     Attributes:
         distances (dict): A dictionary mapping node addresses to their respective distances.
     """
-    
+
     def __init__(self, distances: dict):
         """
         Initializes a GPSEvent.
@@ -427,7 +562,7 @@ class ChangeLocationEvent(AddonEvent):
         latitude (float): New latitude of the node.
         longitude (float): New longitude of the node.
     """
-    
+
     def __init__(self, latitude, longitude):
         """
         Initializes a ChangeLocationEvent.
@@ -450,7 +585,8 @@ class ChangeLocationEvent(AddonEvent):
             tuple: A tuple containing latitude and longitude.
         """
         return (self.latitude, self.longitude)
-    
+
+
 class TestMetricsEvent(AddonEvent):
     def __init__(self, loss, accuracy):
         self._loss = loss

@@ -6,15 +6,12 @@ import logging
 import math
 import os
 import shutil
-import subprocess
-import sys
 import time
 from datetime import datetime
 from urllib.parse import quote
 
-from aiohttp import FormData
 import docker
-import tensorboard_reducer as tbr
+from aiohttp import FormData
 
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
@@ -109,6 +106,11 @@ class Scenario:
         sar_training,
         sar_training_policy,
         physical_ips=None,
+        # SDFL
+        elector=None,
+        validator=None,
+        reputator=None,
+        trustworthy_amount=0,
     ):
         """
         Initialize a Scenario instance.
@@ -199,30 +201,30 @@ class Scenario:
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
         self.with_trustworthiness = with_trustworthiness
-        self.robustness_pillar = robustness_pillar,
-        self.resilience_to_attacks = resilience_to_attacks,
-        self.algorithm_robustness = algorithm_robustness,
-        self.client_reliability = client_reliability,
-        self.privacy_pillar = privacy_pillar,
-        self.technique = technique,
-        self.uncertainty = uncertainty,
-        self.indistinguishability = indistinguishability,
-        self.fairness_pillar = fairness_pillar,
-        self.selection_fairness = selection_fairness,
-        self.performance_fairness = performance_fairness,
-        self.class_distribution = class_distribution,
-        self.explainability_pillar = explainability_pillar,
-        self.interpretability = interpretability,
-        self.post_hoc_methods = post_hoc_methods,
-        self.accountability_pillar = accountability_pillar,
-        self.factsheet_completeness = factsheet_completeness,
-        self.architectural_soundness_pillar = architectural_soundness_pillar,
-        self.client_management = client_management,
-        self.optimization = optimization,
-        self.sustainability_pillar = sustainability_pillar,
-        self.energy_source = energy_source,
-        self.hardware_efficiency = hardware_efficiency,
-        self.federation_complexity = federation_complexity,
+        self.robustness_pillar = (robustness_pillar,)
+        self.resilience_to_attacks = (resilience_to_attacks,)
+        self.algorithm_robustness = (algorithm_robustness,)
+        self.client_reliability = (client_reliability,)
+        self.privacy_pillar = (privacy_pillar,)
+        self.technique = (technique,)
+        self.uncertainty = (uncertainty,)
+        self.indistinguishability = (indistinguishability,)
+        self.fairness_pillar = (fairness_pillar,)
+        self.selection_fairness = (selection_fairness,)
+        self.performance_fairness = (performance_fairness,)
+        self.class_distribution = (class_distribution,)
+        self.explainability_pillar = (explainability_pillar,)
+        self.interpretability = (interpretability,)
+        self.post_hoc_methods = (post_hoc_methods,)
+        self.accountability_pillar = (accountability_pillar,)
+        self.factsheet_completeness = (factsheet_completeness,)
+        self.architectural_soundness_pillar = (architectural_soundness_pillar,)
+        self.client_management = (client_management,)
+        self.optimization = (optimization,)
+        self.sustainability_pillar = (sustainability_pillar,)
+        self.energy_source = (energy_source,)
+        self.hardware_efficiency = (hardware_efficiency,)
+        self.federation_complexity = (federation_complexity,)
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -234,6 +236,73 @@ class Scenario:
         self.sar_training = sar_training
         self.sar_training_policy = sar_training_policy
         self.physical_ips = physical_ips
+
+        # SDFL
+        self.elector = elector
+        self.reputator = reputator
+        self.validator = validator
+        self.trustworthy_amount = trustworthy_amount
+
+    def represenatives_and_trust_assign(
+        self,
+        nodes,
+        trustnode_amount
+    ):
+        import random
+
+        nodes_index = list(nodes.keys())
+        random.shuffle(nodes_index)
+
+        cur_trust = 0
+        trust = []
+        untrust = []
+
+        for node in nodes_index:
+            if (not nodes[node].get("malicious", False)) and cur_trust < trustnode_amount:
+                trust.append(node)
+                cur_trust += 1
+            else:
+                untrust.append(node)
+
+        if len(trust) < trustnode_amount:
+            raise KeyError("Not enough non-malicious nodes to assign trust roles")
+
+        trust_node_addr = []
+        for node in trust:
+            addr = f'{nodes[node]["ip"]}:{nodes[node]["port"]}'
+            trust_node_addr.append(addr)
+
+        for node in nodes_index:
+            nodes[node]["sdfl_args"] = {}
+            nodes[node]["sdfl_args"]["trust_nodes"] = trust_node_addr
+
+        rep_per_trust = len(untrust) // trustnode_amount
+
+        for node in trust:
+            logging.info(f"NODES: {nodes[node]}")
+
+            addr = f'{nodes[node]["ip"]}:{nodes[node]["port"]}'
+            nodes[node]["sdfl_args"]["representative"] = addr
+            nodes[node]["sdfl_args"]["represented_nodes"] = [addr]
+            rep = []
+            rep.extend(untrust[:rep_per_trust])
+            untrust = untrust[rep_per_trust:]
+
+            for n in rep:
+                n_addr = f'{nodes[n]["ip"]}:{nodes[n]["port"]}'
+                nodes[node]["sdfl_args"]["represented_nodes"].append(n_addr)
+                nodes[n]["sdfl_args"]["representative"] = addr
+
+        for i in range(len(untrust)):
+            t = trust[i]
+            n = untrust[i]
+            n_addr = f'{nodes[n]["ip"]}:{nodes[n]["port"]}'
+            t_addr = f'{nodes[t]["ip"]}:{nodes[t]["port"]}'
+
+            nodes[t]["sdfl_args"]["represented_nodes"].append(n_addr)
+            nodes[n]["sdfl_args"]["representative"] = t_addr
+
+        return nodes
 
     def attack_node_assign(
         self,
@@ -656,7 +725,13 @@ class ScenarioManagement:
         else:
             self.scenario.nodes = self.scenario.mobility_assign(self.scenario.nodes, 0)
 
-        # Save node settings
+        if self.scenario.federation == "SDFL":
+            self.scenario.nodes = self.scenario.represenatives_and_trust_assign(
+                self.scenario.nodes,
+                self.scenario.trustworthy_amount
+            )
+
+            # Save node settings
         for node in self.scenario.nodes:
             node_config = self.scenario.nodes[node]
             participant_file = os.path.join(self.config_dir, f"participant_{node_config['id']}.json")
@@ -694,6 +769,15 @@ class ScenarioManagement:
             participant_config["device_args"]["gpu_id"] = self.scenario.gpu_id
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
+            participant_config["sdfl_args"] = {
+                "elector": self.scenario.elector,
+                "validator": self.scenario.validator,
+                "reputator": self.scenario.reputator,
+                "trust_nodes": node_config.get("sdfl_args", {}).get("trust_nodes", []),
+                "represented_nodes": node_config.get("sdfl_args", {}).get("represented_nodes", []),
+                "representative": node_config.get("sdfl_args", {}).get("representative", ""),
+            }
+
             # To be sure that benign nodes have no attack parameters
             if node_config["role"] == "malicious":
                 participant_config["adversarial_args"]["fake_behavior"] = node_config["fake_behavior"]
